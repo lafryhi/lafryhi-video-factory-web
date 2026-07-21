@@ -24,6 +24,18 @@ npm run dev
 
 Open `http://localhost:3000`.
 
+## Validate locally
+
+Run these checks before opening a pull request:
+
+```bash
+npm run lint
+npm run typecheck
+npm run build
+```
+
+Use `npm run validate` to run linting, type checking and the production build in sequence.
+
 ## Analytics setup
 
 Create `.env.local` and add:

@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit --incremental false",
+    "validate": "npm run lint && npm run typecheck && npm run build"
   },
   "dependencies": {
     "next": "^15.4.1",
@@ -17,6 +19,8 @@
     "@types/node": "^22.10.2",
     "@types/react": "^19.0.3",
     "@types/react-dom": "^19.0.2",
+    "eslint": "^9.31.0",
+    "eslint-config-next": "^15.4.1",
     "typescript": "^5.7.2"
   }
 }
