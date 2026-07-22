@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { tools } from "./lib/tools";
+import { TOOL_STATUS_BADGE_CLASSES, TOOL_STATUS_LABELS, tools } from "./lib/tools";
 
 export default function Home() {
   return (
@@ -15,10 +15,10 @@ export default function Home() {
         <div className="section-heading"><div><span>THE TOOLBOX</span><h2>Everything you need for quick video work</h2></div><p>Simple tools, focused results, zero friction.</p></div>
         <div className="grid">
           {tools.map((tool) => (
-            <Link className="card" href={`/tools/${tool.slug}`} key={tool.slug}>
+            <Link className="card" href={tool.route.path} key={tool.route.slug}>
               <div className="icon">{tool.icon}</div>
               <div><h3>{tool.title}</h3><p>{tool.description}</p></div>
-              <span className={tool.status === "ready" ? "badge ready" : "badge"}>{tool.status === "ready" ? "Live" : "Next"}</span>
+              <span className={TOOL_STATUS_BADGE_CLASSES[tool.status]}>{TOOL_STATUS_LABELS[tool.status]}</span>
             </Link>
           ))}
         </div>
