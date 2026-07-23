@@ -1,15 +1,128 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  deleteFFmpegFiles,
-  execFFmpeg,
-  loadFFmpegClient,
-  readFFmpegOutputFile,
-  writeFFmpegInputFile,
-} from "../lib/ffmpeg-client";
 import { TOOL_STATUS_MESSAGES } from "../lib/tools";
 import type { ToolDefinition } from "../lib/tools";
+
+const FFMPEG_VERSION = "0.12.15";
+const FFMPEG_UTIL_VERSION = "0.12.2";
+const FFMPEG_CORE_VERSION = "0.12.10";
+
+const FFMPEG_SCRIPT_URL = `https://unpkg.com/@ffmpeg/ffmpeg@${FFMPEG_VERSION}/dist/umd/ffmpeg.js`;
+const FFMPEG_UTIL_SCRIPT_URL = `https://unpkg.com/@ffmpeg/util@${FFMPEG_UTIL_VERSION}/dist/umd/index.js`;
+const FFMPEG_CORE_BASE_URL = `https://unpkg.com/@ffmpeg/core@${FFMPEG_CORE_VERSION}/dist/umd`;
+
+type FFmpegProgress = {
+  progress?: number;
+};
+
+type FFmpegInstance = {
+  load: (config?: { coreURL?: string; wasmURL?: string }) => Promise<void>;
+  writeFile: (path: string, data: Uint8Array | string) => Promise<void>;
+  exec: (args: string[]) => Promise<number>;
+  readFile: (path: string) => Promise<Uint8Array | string>;
+  deleteFile: (path: string) => Promise<void>;
+  on: (event: "progress", callback: (progress: FFmpegProgress) => void) => void;
+  off: (event: "progress", callback: (progress: FFmpegProgress) => void) => void;
+};
+
+declare global {
+  interface Window {
+    FFmpegWASM?: { FFmpeg: new () => FFmpegInstance };
+    FFmpegUtil?: {
+      fetchFile: (file: File) => Promise<Uint8Array>;
+      toBlobURL: (url: string, mimeType: string) => Promise<string>;
+    };
+  }
+}
+
+let ffmpeg: FFmpegInstance | null = null;
+let ffmpegLoadPromise: Promise<FFmpegInstance> | null = null;
+
+function loadScript(src: string) {
+  return new Promise<void>((resolve, reject) => {
+    const existing = document.querySelector<HTMLScriptElement>(`script[data-ffmpeg-src="${src}"]`);
+    if (existing?.dataset.loaded === "true") {
+      resolve();
+      return;
+    }
+
+    const script = existing ?? document.createElement("script");
+    script.src = src;
+    script.async = true;
+    script.dataset.ffmpegSrc = src;
+    script.addEventListener("load", () => {
+      script.dataset.loaded = "true";
+      resolve();
+    }, { once: true });
+    script.addEventListener("error", () => reject(new Error(`Failed to load FFmpeg asset: ${src}`)), { once: true });
+
+    if (!existing) document.head.appendChild(script);
+  });
+}
+
+async function loadFFmpegClient(): Promise<FFmpegInstance> {
+  if (ffmpeg) return ffmpeg;
+  if (ffmpegLoadPromise) return ffmpegLoadPromise;
+
+  ffmpegLoadPromise = (async () => {
+    try {
+      await Promise.all([loadScript(FFMPEG_SCRIPT_URL), loadScript(FFMPEG_UTIL_SCRIPT_URL)]);
+
+      if (!window.FFmpegWASM || !window.FFmpegUtil) {
+        throw new Error("FFmpeg browser runtime did not initialize correctly.");
+      }
+
+      const instance = new window.FFmpegWASM.FFmpeg();
+      const { toBlobURL } = window.FFmpegUtil;
+      await instance.load({
+        coreURL: await toBlobURL(`${FFMPEG_CORE_BASE_URL}/ffmpeg-core.js`, "text/javascript"),
+        wasmURL: await toBlobURL(`${FFMPEG_CORE_BASE_URL}/ffmpeg-core.wasm`, "application/wasm"),
+      });
+      ffmpeg = instance;
+      return instance;
+    } catch (error) {
+      ffmpegLoadPromise = null;
+      throw error;
+    }
+  })();
+
+  return ffmpegLoadPromise;
+}
+
+async function writeFFmpegInputFile(path: string, file: File) {
+  const instance = await loadFFmpegClient();
+  if (!window.FFmpegUtil) throw new Error("FFmpeg utilities are not loaded.");
+  await instance.writeFile(path, await window.FFmpegUtil.fetchFile(file));
+}
+
+async function execFFmpeg(args: string[], onProgress: (progress: number) => void) {
+  const instance = await loadFFmpegClient();
+  const progressCallback = ({ progress }: FFmpegProgress) => {
+    if (typeof progress === "number" && Number.isFinite(progress)) {
+      onProgress(Math.max(0, Math.min(1, progress)));
+    }
+  };
+
+  instance.on("progress", progressCallback);
+  try {
+    const exitCode = await instance.exec(args);
+    if (exitCode !== 0) throw new Error(`FFmpeg exited with code ${exitCode}.`);
+  } finally {
+    instance.off("progress", progressCallback);
+  }
+}
+
+async function readFFmpegOutputFile(path: string) {
+  const instance = await loadFFmpegClient();
+  const data = await instance.readFile(path);
+  return typeof data === "string" ? new TextEncoder().encode(data) : data;
+}
+
+async function deleteFFmpegFiles(paths: string[]) {
+  if (!ffmpeg) return;
+  await Promise.allSettled(paths.map((path) => ffmpeg?.deleteFile(path)));
+}
 
 type SelectedVideo = {
   id: string;
