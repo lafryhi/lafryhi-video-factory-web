@@ -2,17 +2,29 @@ import Link from "next/link";
 import { TOOL_STATUS_BADGE_CLASSES, TOOL_STATUS_LABELS, tools } from "./lib/tools";
 
 export default function Home() {
+  const availableTools = ["Merge Videos", "Trim Video"];
+  const plannedTools = [
+    "Compress Video",
+    "Remove Audio",
+    "Convert to MP4",
+    "Extract Audio",
+    "Resize for Social Media",
+    "Video Speed",
+    "Reverse Video",
+    "Image to Video",
+  ];
+
   return (
     <>
       <section className="hero">
-        <div className="eyebrow">FREE · PRIVATE · BROWSER-BASED</div>
+        <div className="eyebrow">VERSION 1.0 · FREE · PRIVATE · BROWSER-BASED</div>
         <h1>Free video tools.<br /><em>No signup. No watermark.</em></h1>
-        <p>Edit, convert, compress and create videos directly in your browser. Your files stay on your device.</p>
+        <p>Version 1.0 includes two browser-based tools: Merge Videos and Trim Video. More tools are in active development, and your files stay on your device.</p>
         <a className="primary" href="#tools">Explore free tools</a>
       </section>
 
       <section className="tools" id="tools">
-        <div className="section-heading"><div><span>THE TOOLBOX</span><h2>Everything you need for quick video work</h2></div><p>Simple tools, focused results, zero friction.</p></div>
+        <div className="section-heading"><div><span>THE TOOLBOX · V1.0</span><h2>Two tools available now</h2></div><p>Merge and trim today. Additional tools are planned for future releases.</p></div>
         <div className="grid">
           {tools.map((tool) => (
             <Link className="card" href={tool.route.path} key={tool.route.slug}>
@@ -21,6 +33,46 @@ export default function Home() {
               <span className={TOOL_STATUS_BADGE_CLASSES[tool.status]}>{TOOL_STATUS_LABELS[tool.status]}</span>
             </Link>
           ))}
+        </div>
+      </section>
+
+      <section className="roadmap" id="roadmap">
+        <div className="section-heading">
+          <div><span>ACTIVE DEVELOPMENT</span><h2>Roadmap</h2></div>
+          <p>We&apos;re continuously adding new professional video tools. Come back regularly to discover new releases.</p>
+        </div>
+        <div className="roadmap-grid">
+          <article>
+            <span>AVAILABLE NOW</span>
+            <ul>
+              {availableTools.map((tool) => <li className="available" key={tool}><span aria-hidden="true">✓</span>{tool}</li>)}
+            </ul>
+          </article>
+          <article>
+            <span>COMING SOON</span>
+            <ul>
+              {plannedTools.map((tool) => <li key={tool}>{tool}</li>)}
+            </ul>
+          </article>
+        </div>
+      </section>
+
+      <section className="release">
+        <div className="section-heading">
+          <div><span>CHANGELOG</span><h2>Latest Release</h2></div>
+          <p>A compact view of what shipped and what is planned next.</p>
+        </div>
+        <div className="release-grid">
+          <article>
+            <span>v1.0</span>
+            <h3>Available now</h3>
+            <ul><li>Merge Videos</li><li>Trim Video</li></ul>
+          </article>
+          <article>
+            <span>NEXT RELEASE</span>
+            <h3>v1.1</h3>
+            <ul><li>Compress Video</li></ul>
+          </article>
         </div>
       </section>
 

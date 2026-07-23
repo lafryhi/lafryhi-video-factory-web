@@ -25,7 +25,14 @@ export type ToolCategory =
   | "audio"
   | "create";
 
-export type ToolOptionSchema = Record<string, never>;
+export type ToolNumberOption = {
+  kind: "number";
+  label: string;
+  min: number;
+  step: number;
+};
+
+export type ToolOptionSchema = Readonly<Record<string, ToolNumberOption>>;
 
 export type ToolRoute = {
   slug: ToolSlug;

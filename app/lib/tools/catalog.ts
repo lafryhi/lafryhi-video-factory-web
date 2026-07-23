@@ -20,7 +20,7 @@ export const tools = [
     title: "Trim Video",
     description: "Cut the beginning or end of a video quickly.",
     icon: "✂",
-    status: "coming-soon",
+    status: "ready",
     input: { kind: "video", accept: "video/*", multiple: false },
     output: { kind: "video", formatLabel: "Trimmed video" },
     analyticsCategory: "edit",

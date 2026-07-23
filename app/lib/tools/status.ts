@@ -1,8 +1,8 @@
 import type { ToolStatus } from "./types";
 
 export const TOOL_STATUS_LABELS = {
-  ready: "Live",
-  "coming-soon": "Next",
+  ready: "LIVE",
+  "coming-soon": "Coming Soon",
 } as const satisfies Record<ToolStatus, string>;
 
 export const TOOL_STATUS_MESSAGES = {
