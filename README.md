@@ -1,18 +1,19 @@
 # LAFRYHI Video Factory Web
 
-A privacy-first collection of free browser-based video tools.
+A privacy-first collection of free browser-based video tool pages.
 
-## Included in this first implementation
+## Included in this implementation
 
 - Premium responsive landing page
-- Dedicated SEO route for each of 10 tools
-- No-account upload workflow
-- Browser-local processing architecture using FFmpeg WebAssembly
-- Working **Remove Audio** tool
-- Working **Extract Audio** tool
+- Dedicated SEO route for each of 10 planned tools
+- No-account file selection workflow
+- Typed centralized tool registry for route, UI, SEO, readiness, input/output, analytics category and future option metadata
+- Working client-side **Merge Videos** workflow powered by FFmpeg WebAssembly
+- Coming-soon processing placeholders for the remaining tools
 - Google Analytics 4 integration
 - Microsoft Clarity integration
 - Vercel-ready configuration
+- CI validation for linting, type checking, production builds and local validation
 
 ## Run locally
 
@@ -57,18 +58,24 @@ Analytics counts visitors without requiring user accounts. GA4 is configured wit
 
 ## Current tool status
 
-Live processing:
-- Remove Audio
-- Extract Audio
-
-Prepared routes, UI, analytics events and file workflow:
+Live client-side processing:
 - Merge Videos
+
+Coming soon:
 - Trim Video
 - Compress Video
 - Resize Video
+- Remove Audio
 - Convert to MP4
+- Extract Audio
 - Image to Video
 - Video Speed
 - Reverse Video
 
-These remaining engines should be activated in focused batches to keep exports reliable across mobile browsers.
+Merge Videos runs fully in the browser. Files are not uploaded to a backend service, but FFmpeg assets are loaded by the browser and processing depends on device CPU, memory and browser WebAssembly support. Large clips, many clips, unsupported codecs or low-memory mobile browsers may fail and should be retried with smaller inputs.
+
+## Merge strategy
+
+The merge workflow intentionally does not use FFmpeg stream-copy concat as the default path because that approach is only reliable when every user-provided file has matching codecs, dimensions, time bases and stream layouts. User uploads are often mixed, so Merge Videos uses FFmpeg's concat demuxer with H.264/AAC re-encoding and exports an MP4 file.
+
+Re-encoding improves compatibility for the first working browser tool, but it can change quality, increase processing time and use significant memory. This project does not claim original-quality preservation for merged exports.

@@ -4,13 +4,13 @@ import { getTool, tools } from "../../lib/tools";
 import { ToolWorkspace } from "../../components/ToolWorkspace";
 
 export function generateStaticParams() {
-  return tools.map((tool) => ({ slug: tool.slug }));
+  return tools.map((tool) => ({ slug: tool.route.slug }));
 }
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
   const tool = getTool(slug);
-  return tool ? { title: tool.title, description: tool.description } : {};
+  return tool ? tool.seo : {};
 }
 
 export default async function ToolPage({ params }: { params: Promise<{ slug: string }> }) {
