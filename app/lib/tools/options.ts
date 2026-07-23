@@ -6,6 +6,7 @@ export const TOOL_OPTION_SCHEMAS = {
     startTime: { kind: "number", label: "Start time (seconds)", min: 0, step: 0.1 },
     endTime: { kind: "number", label: "End time (seconds)", min: 0, step: 0.1 },
   },
+  "cinematic-transition": {},
   "compress-video": {},
   "resize-video": {},
   "remove-audio": {},

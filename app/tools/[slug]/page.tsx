@@ -20,7 +20,7 @@ export default async function ToolPage({ params }: { params: Promise<{ slug: str
 
   return (
     <section className="tool-page">
-      <div className="tool-title"><div className="icon large">{tool.icon}</div><span>FREE ONLINE TOOL</span><h1>{tool.title}</h1><p>{tool.description} No signup and no watermark.</p></div>
+      <div className="tool-title"><div className="icon large">{tool.icon}</div><span>FREE ONLINE TOOL</span><h1>{tool.title}</h1><p>{tool.helperText ?? `${tool.description} No signup and no watermark.`}</p></div>
       <ToolWorkspace tool={tool} />
       <div className="how"><h2>How it works</h2><div><article><b>1</b><h3>Select your file</h3><p>Choose a file from your phone or computer.</p></article><article><b>2</b><h3>Process privately</h3><p>The browser performs the work on your device.</p></article><article><b>3</b><h3>Download the result</h3><p>Save the finished file immediately.</p></article></div></div>
     </section>

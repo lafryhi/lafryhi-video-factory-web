@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 export type ToolSlug =
   | "merge-videos"
   | "trim-video"
+  | "cinematic-transition"
   | "compress-video"
   | "resize-video"
   | "remove-audio"
@@ -14,7 +15,7 @@ export type ToolSlug =
 
 export type ToolStatus = "ready" | "coming-soon";
 
-export type ToolInputKind = "video" | "image";
+export type ToolInputKind = "video" | "image" | "media";
 export type ToolOutputKind = "video" | "audio";
 
 export type ToolCategory =
@@ -56,6 +57,7 @@ export type ToolDefinition = {
   route: ToolRoute;
   title: string;
   description: string;
+  helperText?: string;
   icon: string;
   status: ToolStatus;
   input: ToolInput;

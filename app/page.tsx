@@ -2,7 +2,7 @@ import Link from "next/link";
 import { TOOL_STATUS_BADGE_CLASSES, TOOL_STATUS_LABELS, tools } from "./lib/tools";
 
 export default function Home() {
-  const availableTools = ["Merge Videos", "Trim Video"];
+  const availableTools = ["Merge Videos", "Trim Video", "Cinematic Transition"];
   const plannedTools = [
     "Compress Video",
     "Remove Audio",
@@ -17,14 +17,14 @@ export default function Home() {
   return (
     <>
       <section className="hero">
-        <div className="eyebrow">VERSION 1.0 · FREE · PRIVATE · BROWSER-BASED</div>
+        <div className="eyebrow">VERSION 1.1 · FREE · PRIVATE · BROWSER-BASED</div>
         <h1>Free video tools.<br /><em>No signup. No watermark.</em></h1>
-        <p>Version 1.0 includes two browser-based tools: Merge Videos and Trim Video. More tools are in active development, and your files stay on your device.</p>
+        <p>Version 1.1 includes three browser-based tools: Merge Videos, Trim Video and Cinematic Transition. Your files stay on your device.</p>
         <a className="primary" href="#tools">Explore free tools</a>
       </section>
 
       <section className="tools" id="tools">
-        <div className="section-heading"><div><span>THE TOOLBOX · V1.0</span><h2>Two tools available now</h2></div><p>Merge and trim today. Additional tools are planned for future releases.</p></div>
+        <div className="section-heading"><div><span>THE TOOLBOX · V1.1</span><h2>Three tools available now</h2></div><p>Merge, trim and connect mixed media today. Additional tools are planned for future releases.</p></div>
         <div className="grid">
           {tools.map((tool) => (
             <Link className="card" href={tool.route.path} key={tool.route.slug}>
@@ -64,14 +64,14 @@ export default function Home() {
         </div>
         <div className="release-grid">
           <article>
-            <span>v1.0</span>
-            <h3>Available now</h3>
-            <ul><li>Merge Videos</li><li>Trim Video</li></ul>
+            <span>v1.1</span>
+            <h3>Cinematic Transition</h3>
+            <ul><li>Connect images and videos with automatic cinematic movement, smooth crossfades and synchronized audio.</li></ul>
           </article>
           <article>
-            <span>NEXT RELEASE</span>
-            <h3>v1.1</h3>
-            <ul><li>Compress Video</li></ul>
+            <span>ALSO AVAILABLE</span>
+            <h3>v1.0</h3>
+            <ul><li>Merge Videos</li><li>Trim Video</li></ul>
           </article>
         </div>
       </section>

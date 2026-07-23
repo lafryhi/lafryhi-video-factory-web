@@ -5,10 +5,10 @@ A privacy-first collection of free browser-based video tool pages.
 ## Included in this implementation
 
 - Premium responsive landing page
-- Dedicated SEO route for each of 10 planned tools
+- Dedicated SEO route for each of 11 tools
 - No-account file selection workflow
 - Typed centralized tool registry for route, UI, SEO, readiness, input/output, analytics category and future option metadata
-- Working client-side **Merge Videos** and **Trim Video** workflows powered by FFmpeg WebAssembly
+- Working client-side **Merge Videos**, **Trim Video** and **Cinematic Transition** workflows powered by FFmpeg WebAssembly
 - Coming-soon processing placeholders for the remaining eight tools
 - Google Analytics 4 integration
 - Microsoft Clarity integration
@@ -61,6 +61,7 @@ Analytics counts visitors without requiring user accounts. GA4 is configured wit
 Live client-side processing:
 - Merge Videos
 - Trim Video
+- Cinematic Transition
 
 Coming soon:
 - Compress Video
@@ -72,7 +73,7 @@ Coming soon:
 - Video Speed
 - Reverse Video
 
-Merge Videos and Trim Video run fully in the browser. Files are not uploaded to a backend service, but FFmpeg assets are loaded by the browser and processing depends on device CPU, memory and browser WebAssembly support. Large clips, many clips, unsupported codecs or low-memory mobile browsers may fail and should be retried with smaller inputs.
+Merge Videos, Trim Video and Cinematic Transition run fully in the browser. Files are not uploaded to a backend service, but FFmpeg assets are loaded by the browser and processing depends on device CPU, memory and browser WebAssembly support. Large clips, many clips, unsupported codecs or low-memory mobile browsers may fail and should be retried with smaller inputs.
 
 Trim Video accepts start and end times in seconds, including decimals, and exports the selected range as an H.264/AAC MP4. The start time must be zero or greater, and the end time must be greater than the start time.
 

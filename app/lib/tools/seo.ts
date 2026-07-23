@@ -3,6 +3,10 @@ import type { ToolSeo, ToolSlug } from "./types";
 export const TOOL_SEO = {
   "merge-videos": { title: "Merge Videos", description: "Combine several video clips into one file." },
   "trim-video": { title: "Trim Video", description: "Cut the beginning or end of a video quickly." },
+  "cinematic-transition": {
+    title: "Cinematic Transition",
+    description: "Seamlessly connect images and videos with automatic cinematic motion.",
+  },
   "compress-video": { title: "Compress Video", description: "Reduce video file size while preserving quality." },
   "resize-video": { title: "Resize for Social Media", description: "Resize videos for TikTok, Reels, Shorts and more." },
   "remove-audio": { title: "Remove Audio", description: "Create a silent copy of your video." },

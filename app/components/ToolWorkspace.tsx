@@ -1,43 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import NextImage from "next/image";
+import { FFmpeg } from "@ffmpeg/ffmpeg";
+import type { LogEvent, ProgressEvent } from "@ffmpeg/ffmpeg";
+import { fetchFile } from "@ffmpeg/util";
 import { TOOL_STATUS_MESSAGES } from "../lib/tools";
 import type { ToolDefinition } from "../lib/tools";
 
-const FFMPEG_VERSION = "0.12.15";
-const FFMPEG_UTIL_VERSION = "0.12.2";
-const FFMPEG_CORE_VERSION = "0.12.10";
+const FFMPEG_CORE_URL = "/ffmpeg/ffmpeg-core.js";
+const FFMPEG_WASM_URL = "/ffmpeg/ffmpeg-core.wasm";
 
-const FFMPEG_SCRIPT_URL = `https://unpkg.com/@ffmpeg/ffmpeg@${FFMPEG_VERSION}/dist/umd/ffmpeg.js`;
-const FFMPEG_UTIL_SCRIPT_URL = `https://unpkg.com/@ffmpeg/util@${FFMPEG_UTIL_VERSION}/dist/umd/index.js`;
-const FFMPEG_CORE_BASE_URL = `https://unpkg.com/@ffmpeg/core@${FFMPEG_CORE_VERSION}/dist/umd`;
-
-type FFmpegProgress = {
-  progress?: number;
-};
-
-type FFmpegInstance = {
-  load: (config?: { coreURL?: string; wasmURL?: string }) => Promise<void>;
-  writeFile: (path: string, data: Uint8Array | string) => Promise<void>;
-  exec: (args: string[]) => Promise<number>;
-  readFile: (path: string) => Promise<Uint8Array | string>;
-  deleteFile: (path: string) => Promise<void>;
-  on: (event: "progress", callback: (progress: FFmpegProgress) => void) => void;
-  off: (event: "progress", callback: (progress: FFmpegProgress) => void) => void;
-};
-
-declare global {
-  interface Window {
-    FFmpegWASM?: { FFmpeg: new () => FFmpegInstance };
-    FFmpegUtil?: {
-      fetchFile: (file: File) => Promise<Uint8Array>;
-      toBlobURL: (url: string, mimeType: string) => Promise<string>;
-    };
-  }
-}
-
-let ffmpeg: FFmpegInstance | null = null;
-let ffmpegLoadPromise: Promise<FFmpegInstance> | null = null;
+let ffmpeg: FFmpeg | null = null;
+let ffmpegLoadPromise: Promise<FFmpeg> | null = null;
 let ffmpegOperationLocked = false;
 
 function tryAcquireFFmpegOperation() {
@@ -50,51 +25,27 @@ function releaseFFmpegOperation() {
   ffmpegOperationLocked = false;
 }
 
-function loadScript(src: string) {
-  return new Promise<void>((resolve, reject) => {
-    const existing = document.querySelector<HTMLScriptElement>(`script[data-ffmpeg-src="${src}"]`);
-    if (existing?.dataset.loaded === "true") {
-      resolve();
-      return;
-    }
-
-    const script = existing ?? document.createElement("script");
-    script.src = src;
-    script.async = true;
-    script.dataset.ffmpegSrc = src;
-    script.addEventListener("load", () => {
-      script.dataset.loaded = "true";
-      resolve();
-    }, { once: true });
-    script.addEventListener("error", () => reject(new Error(`Failed to load FFmpeg asset: ${src}`)), { once: true });
-
-    if (!existing) document.head.appendChild(script);
-  });
-}
-
-async function loadFFmpegClient(): Promise<FFmpegInstance> {
+async function loadFFmpegClient(): Promise<FFmpeg> {
   if (ffmpeg) return ffmpeg;
   if (ffmpegLoadPromise) return ffmpegLoadPromise;
 
   ffmpegLoadPromise = (async () => {
     try {
-      await Promise.all([loadScript(FFMPEG_SCRIPT_URL), loadScript(FFMPEG_UTIL_SCRIPT_URL)]);
-
-      if (!window.FFmpegWASM || !window.FFmpegUtil) {
-        throw new Error("FFmpeg browser runtime did not initialize correctly.");
-      }
-
-      const instance = new window.FFmpegWASM.FFmpeg();
-      const { toBlobURL } = window.FFmpegUtil;
+      const instance = new FFmpeg();
       await instance.load({
-        coreURL: await toBlobURL(`${FFMPEG_CORE_BASE_URL}/ffmpeg-core.js`, "text/javascript"),
-        wasmURL: await toBlobURL(`${FFMPEG_CORE_BASE_URL}/ffmpeg-core.wasm`, "application/wasm"),
+        coreURL: FFMPEG_CORE_URL,
+        wasmURL: FFMPEG_WASM_URL,
       });
       ffmpeg = instance;
       return instance;
     } catch (error) {
       ffmpegLoadPromise = null;
-      throw error;
+      console.error("FFmpeg runtime failed to load from same-origin assets.", {
+        coreURL: FFMPEG_CORE_URL,
+        wasmURL: FFMPEG_WASM_URL,
+        error,
+      });
+      throw new Error("FFmpeg runtime load failed.", { cause: error });
     }
   })();
 
@@ -103,13 +54,12 @@ async function loadFFmpegClient(): Promise<FFmpegInstance> {
 
 async function writeFFmpegInputFile(path: string, file: File) {
   const instance = await loadFFmpegClient();
-  if (!window.FFmpegUtil) throw new Error("FFmpeg utilities are not loaded.");
-  await instance.writeFile(path, await window.FFmpegUtil.fetchFile(file));
+  await instance.writeFile(path, await fetchFile(file));
 }
 
 async function execFFmpeg(args: string[], onProgress: (progress: number) => void) {
   const instance = await loadFFmpegClient();
-  const progressCallback = ({ progress }: FFmpegProgress) => {
+  const progressCallback = ({ progress }: ProgressEvent) => {
     if (typeof progress === "number" && Number.isFinite(progress)) {
       onProgress(Math.max(0, Math.min(1, progress)));
     }
@@ -139,6 +89,21 @@ function createMp4ObjectUrl(output: Uint8Array) {
 async function deleteFFmpegFiles(paths: string[]) {
   if (!ffmpeg) return;
   await Promise.allSettled(paths.map((path) => ffmpeg?.deleteFile(path)));
+}
+
+async function ffmpegInputHasAudio(path: string) {
+  const instance = await loadFFmpegClient();
+  let log = "";
+  const logCallback = ({ message }: LogEvent) => {
+    if (message) log += `${message}\n`;
+  };
+  instance.on("log", logCallback);
+  try {
+    await instance.exec(["-i", path, "-map", "0:a:0?", "-t", "0.01", "-f", "null", "-"]);
+  } finally {
+    instance.off("log", logCallback);
+  }
+  return /Stream #\d+:\d+(?:\([^)]*\))?: Audio:/i.test(log);
 }
 
 type SelectedVideo = {
@@ -723,6 +688,441 @@ function TrimVideoWorkspace({ tool }: { tool: ToolDefinition }) {
   );
 }
 
+type CinematicMedia = {
+  id: string;
+  file: File;
+  kind: "image" | "video";
+  previewUrl: string;
+  duration: number | null;
+};
+
+type CinematicStage =
+  | "Reading media…"
+  | "Loading video engine…"
+  | "Preparing images and videos…"
+  | "Creating cinematic motion…"
+  | "Blending scenes…"
+  | "Mixing audio…"
+  | "Finalizing MP4…";
+
+const CINEMATIC_MIN_FILES = 2;
+const CINEMATIC_MAX_FILES = 3;
+const IMAGE_DURATION = 3.5;
+const TRANSITION_DURATION = 0.6;
+const FINAL_FADE_DURATION = 0.38;
+const CINEMATIC_OUTPUT_FILE = "cinematic-transition-output.mp4";
+const SUPPORTED_MEDIA_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+]);
+
+function formatDuration(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.floor(seconds % 60);
+  return `${minutes}:${remainder.toString().padStart(2, "0")}`;
+}
+
+function validateImage(file: File) {
+  return new Promise<void>((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const image = new Image();
+    const cleanup = () => {
+      image.onload = null;
+      image.onerror = null;
+      URL.revokeObjectURL(url);
+    };
+    image.onload = () => {
+      cleanup();
+      if (image.naturalWidth > 0 && image.naturalHeight > 0) resolve();
+      else reject(new Error(`"${file.name}" is empty or unreadable.`));
+    };
+    image.onerror = () => {
+      cleanup();
+      reject(new Error(`"${file.name}" is not a readable image.`));
+    };
+    image.src = url;
+  });
+}
+
+function cinematicErrorMessage(error: unknown) {
+  if (error instanceof DOMException && error.name === "QuotaExceededError") {
+    return "The selected files are too large for the browser memory available. Try smaller files.";
+  }
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+    if (message.includes("memory") || message.includes("allocation")) {
+      return "The selected files are too large for the browser memory available. Try smaller files.";
+    }
+    if (message.includes("load") || message.includes("asset") || message.includes("runtime")) {
+      return "The video engine could not load in this browser. Check your connection and try again.";
+    }
+    if (message.includes("metadata") || message.includes("duration")) {
+      return error.message;
+    }
+    if (message.includes("output")) {
+      return "The cinematic transition finished without a readable output. Try different files.";
+    }
+    if (message.includes("ffmpeg") || message.includes("codec") || message.includes("decode")) {
+      return "The cinematic transition could not be created. One of the video codecs may not be supported.";
+    }
+    return error.message;
+  }
+  return "The cinematic transition could not be created.";
+}
+
+function imageMotionFilter(index: number, count: number) {
+  const frames = Math.round(IMAGE_DURATION * 30);
+  const middle = count === 3 && index === 1;
+  const final = index === count - 1;
+  const zoom = middle
+    ? `1.07-0.07*on/${frames - 1}`
+    : `1+${final ? "0.06" : "0.07"}*on/${frames - 1}`;
+  const x = middle
+    ? `(iw-iw/zoom)/2+(on/${frames - 1})*10`
+    : `(iw-iw/zoom)/2-(on/${frames - 1})*10`;
+  const y = final
+    ? `(ih-ih/zoom)/2-(on/${frames - 1})*10`
+    : `(ih-ih/zoom)/2`;
+  return `scale=1408:792:force_original_aspect_ratio=increase,crop=1408:792,zoompan=z='${zoom}':x='${x}':y='${y}':d=${frames}:s=1280x720:fps=30,setsar=1,format=yuv420p`;
+}
+
+function buildTransitionFilter(durations: number[]) {
+  let videoLabel = "0:v";
+  let audioLabel = "0:a";
+  let elapsed = durations[0];
+  const filters: string[] = [];
+
+  for (let index = 1; index < durations.length; index += 1) {
+    const nextVideo = `vx${index}`;
+    const nextAudio = `ax${index}`;
+    const offset = elapsed - TRANSITION_DURATION;
+    filters.push(
+      `[${videoLabel}][${index}:v]xfade=transition=fade:duration=${TRANSITION_DURATION}:offset=${offset.toFixed(3)}[${nextVideo}]`,
+      `[${audioLabel}][${index}:a]acrossfade=d=${TRANSITION_DURATION}:c1=tri:c2=tri[${nextAudio}]`
+    );
+    videoLabel = nextVideo;
+    audioLabel = nextAudio;
+    elapsed += durations[index] - TRANSITION_DURATION;
+  }
+
+  const fadeStart = Math.max(0, elapsed - FINAL_FADE_DURATION);
+  filters.push(
+    `[${videoLabel}]fade=t=out:st=${fadeStart.toFixed(3)}:d=${FINAL_FADE_DURATION},format=yuv420p[vout]`,
+    `[${audioLabel}]afade=t=out:st=${fadeStart.toFixed(3)}:d=${FINAL_FADE_DURATION}[aout]`
+  );
+  return filters.join(";");
+}
+
+function CinematicTransitionWorkspace({ tool }: { tool: ToolDefinition }) {
+  const [media, setMedia] = useState<CinematicMedia[]>([]);
+  const [phase, setPhase] = useState<WorkspacePhase>("idle");
+  const [stage, setStage] = useState<CinematicStage>("Reading media…");
+  const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [inputKey, setInputKey] = useState(0);
+  const downloadUrlRef = useRef<string | null>(null);
+  const mediaRef = useRef<CinematicMedia[]>([]);
+  const selectionVersionRef = useRef(0);
+
+  const isWorking = phase === "metadata" || phase === "loading" || phase === "processing";
+  const canGenerate = media.length >= CINEMATIC_MIN_FILES && !isWorking;
+
+  useEffect(() => {
+    mediaRef.current = media;
+  }, [media]);
+
+  useEffect(() => () => {
+    selectionVersionRef.current += 1;
+    mediaRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    if (downloadUrlRef.current) URL.revokeObjectURL(downloadUrlRef.current);
+  }, []);
+
+  function replaceDownloadUrl(url: string | null) {
+    if (downloadUrlRef.current) URL.revokeObjectURL(downloadUrlRef.current);
+    downloadUrlRef.current = url;
+    setDownloadUrl(url);
+  }
+
+  function clearResult() {
+    replaceDownloadUrl(null);
+    setProgress(0);
+    setPhase("idle");
+    setError(null);
+  }
+
+  async function addFiles(files: File[]) {
+    const version = selectionVersionRef.current + 1;
+    selectionVersionRef.current = version;
+    clearResult();
+
+    if (media.length + files.length > CINEMATIC_MAX_FILES) {
+      setPhase("error");
+      setError("Select no more than three images or videos.");
+      setInputKey((current) => current + 1);
+      return;
+    }
+    const invalid = files.find((file) => !SUPPORTED_MEDIA_TYPES.has(file.type));
+    if (invalid) {
+      setPhase("error");
+      setError(`"${invalid.name}" is not a supported image or video format.`);
+      setInputKey((current) => current + 1);
+      return;
+    }
+    const empty = files.find((file) => file.size <= 0);
+    if (empty) {
+      setPhase("error");
+      setError(`"${empty.name}" is empty or unreadable.`);
+      setInputKey((current) => current + 1);
+      return;
+    }
+
+    setPhase("metadata");
+    setStage("Reading media…");
+    const createdUrls: string[] = [];
+    try {
+      const nextItems = await Promise.all(files.map(async (file, index) => {
+        const kind = file.type.startsWith("image/") ? "image" : "video";
+        let duration: number | null = null;
+        if (kind === "image") {
+          await validateImage(file);
+        } else {
+          duration = await readVideoDuration(file, new AbortController().signal);
+        }
+        const previewUrl = URL.createObjectURL(file);
+        createdUrls.push(previewUrl);
+        return {
+          id: `${Date.now()}-${index}-${file.name}-${file.size}-${file.lastModified}`,
+          file,
+          kind,
+          previewUrl,
+          duration,
+        } satisfies CinematicMedia;
+      }));
+      if (selectionVersionRef.current !== version) {
+        createdUrls.forEach((url) => URL.revokeObjectURL(url));
+        return;
+      }
+      setMedia((current) => [...current, ...nextItems]);
+      setPhase("idle");
+    } catch (metadataError) {
+      createdUrls.forEach((url) => URL.revokeObjectURL(url));
+      if (selectionVersionRef.current === version) {
+        setPhase("error");
+        setError(cinematicErrorMessage(metadataError));
+      }
+    } finally {
+      setInputKey((current) => current + 1);
+    }
+  }
+
+  function moveItem(index: number, direction: -1 | 1) {
+    clearResult();
+    setMedia((current) => {
+      const target = index + direction;
+      if (target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  }
+
+  function removeItem(id: string) {
+    clearResult();
+    setMedia((current) => {
+      const removed = current.find((item) => item.id === id);
+      if (removed) URL.revokeObjectURL(removed.previewUrl);
+      return current.filter((item) => item.id !== id);
+    });
+  }
+
+  function resetWorkspace() {
+    selectionVersionRef.current += 1;
+    mediaRef.current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+    setMedia([]);
+    clearResult();
+    setInputKey((current) => current + 1);
+  }
+
+  async function generateTransition() {
+    if (media.length < CINEMATIC_MIN_FILES) {
+      setPhase("error");
+      setError("Select at least two images or videos before generating a transition.");
+      return;
+    }
+    if (!tryAcquireFFmpegOperation()) {
+      setPhase("error");
+      setError("The video engine is already processing another operation. Wait for it to finish and try again.");
+      return;
+    }
+
+    const inputFiles = media.map(({ file }, index) => `cinematic-${safeInputName(index, file)}`);
+    const normalizedFiles = media.map((_, index) => `cinematic-normalized-${index}.mp4`);
+    const tempFiles = [...inputFiles, ...normalizedFiles, CINEMATIC_OUTPUT_FILE];
+
+    try {
+      replaceDownloadUrl(null);
+      setError(null);
+      setProgress(0);
+      setPhase("loading");
+      setStage("Loading video engine…");
+      await loadFFmpegClient();
+
+      setPhase("processing");
+      setStage("Preparing images and videos…");
+      await Promise.all(media.map(({ file }, index) => writeFFmpegInputFile(inputFiles[index], file)));
+
+      const durations = media.map((item) => item.kind === "image" ? IMAGE_DURATION : item.duration ?? 0);
+      for (let index = 0; index < media.length; index += 1) {
+        const item = media[index];
+        const duration = durations[index];
+        if (!(duration > 0)) throw new Error(`The browser could not determine "${item.file.name}" duration.`);
+        setStage(item.kind === "image" ? "Creating cinematic motion…" : "Preparing images and videos…");
+
+        if (item.kind === "image") {
+          await execFFmpeg([
+            "-y", "-loop", "1", "-t", String(IMAGE_DURATION), "-i", inputFiles[index],
+            "-f", "lavfi", "-t", String(IMAGE_DURATION), "-i", "anullsrc=channel_layout=stereo:sample_rate=48000",
+            "-filter:v", imageMotionFilter(index, media.length),
+            "-map", "0:v:0", "-map", "1:a:0",
+            "-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
+            "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", "-shortest",
+            normalizedFiles[index],
+          ], (value) => setProgress((index + value) / (media.length + 1)));
+        } else {
+          const hasAudio = await ffmpegInputHasAudio(inputFiles[index]);
+          const args = ["-y", "-i", inputFiles[index]];
+          if (!hasAudio) {
+            args.push("-f", "lavfi", "-t", String(duration), "-i", "anullsrc=channel_layout=stereo:sample_rate=48000");
+          }
+          args.push(
+            "-filter:v", "scale=1280:720:force_original_aspect_ratio=increase,crop=1280:720,setsar=1,fps=30,setpts=PTS-STARTPTS,format=yuv420p",
+            "-filter:a", hasAudio
+              ? `aresample=48000,asetpts=PTS-STARTPTS,apad,atrim=0:${duration}`
+              : `asetpts=PTS-STARTPTS,atrim=0:${duration}`,
+            "-map", "0:v:0", "-map", hasAudio ? "0:a:0" : "1:a:0",
+            "-t", String(duration), "-r", "30", "-c:v", "libx264", "-preset", "veryfast",
+            "-crf", "22", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k",
+            normalizedFiles[index]
+          );
+          await execFFmpeg(args, (value) => setProgress((index + value) / (media.length + 1)));
+        }
+      }
+
+      setStage("Blending scenes…");
+      const finalArgs = ["-y"];
+      normalizedFiles.forEach((file) => finalArgs.push("-i", file));
+      finalArgs.push(
+        "-filter_complex", buildTransitionFilter(durations),
+        "-map", "[vout]", "-map", "[aout]",
+        "-r", "30", "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
+        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k",
+        "-movflags", "+faststart", CINEMATIC_OUTPUT_FILE
+      );
+      setStage("Mixing audio…");
+      await execFFmpeg(finalArgs, (value) => setProgress((media.length + value) / (media.length + 1)));
+
+      setStage("Finalizing MP4…");
+      const output = await readFFmpegOutputFile(CINEMATIC_OUTPUT_FILE);
+      if (!output.byteLength) throw new Error("Missing output file.");
+      replaceDownloadUrl(createMp4ObjectUrl(output));
+      setProgress(1);
+      setPhase("complete");
+    } catch (processingError) {
+      setPhase("error");
+      setError(cinematicErrorMessage(processingError));
+    } finally {
+      try {
+        await deleteFFmpegFiles(tempFiles);
+      } finally {
+        releaseFFmpegOperation();
+      }
+    }
+  }
+
+  return (
+    <section className="workspace cinematic-workspace">
+      <label className="dropzone">
+        <input
+          key={inputKey}
+          type="file"
+          accept={tool.input.accept}
+          multiple
+          disabled={isWorking || media.length >= CINEMATIC_MAX_FILES}
+          aria-label="Select two or three images or videos"
+          onChange={(event) => void addFiles(Array.from(event.target.files ?? []))}
+        />
+        <span className="drop-icon">↑</span>
+        <strong>Select 2–3 images or videos</strong>
+        <small>Your files stay on your device. Cinematic motion and transitions are created automatically in your browser.</small>
+      </label>
+
+      {media.length ? (
+        <div className="selection stack cinematic-selection">
+          <div className="selection-heading">
+            <div><strong>{media.length} of 3 files selected</strong><small>{formatMegabytes(media.reduce((sum, item) => sum + item.file.size, 0))}</small></div>
+            <button type="button" className="secondary" onClick={resetWorkspace} disabled={isWorking}>Reset workspace</button>
+          </div>
+
+          <ol className="file-list media-list" aria-label="Selected media in transition order">
+            {media.map((item, index) => (
+              <li key={item.id}>
+                {item.kind === "image"
+                  ? <NextImage className="media-thumbnail" src={item.previewUrl} alt="" width={96} height={62} unoptimized />
+                  : <video className="media-thumbnail" src={item.previewUrl} muted preload="metadata" aria-label={`Preview of ${item.file.name}`} />}
+                <div className="media-details">
+                  <span className="media-badge">{item.kind === "image" ? "Image" : "Video"}</span>
+                  <strong title={item.file.name}>{item.file.name}</strong>
+                  <small>{formatMegabytes(item.file.size)}{item.duration ? ` · ${formatDuration(item.duration)}` : ""}</small>
+                </div>
+                <div className="file-actions">
+                  <button type="button" className="secondary" onClick={() => moveItem(index, -1)} disabled={isWorking || index === 0} aria-label={`Move ${item.file.name} earlier`}>↑</button>
+                  <button type="button" className="secondary" onClick={() => moveItem(index, 1)} disabled={isWorking || index === media.length - 1} aria-label={`Move ${item.file.name} later`}>↓</button>
+                  <button type="button" className="secondary" onClick={() => removeItem(item.id)} disabled={isWorking} aria-label={`Remove ${item.file.name}`}>Remove</button>
+                </div>
+              </li>
+            ))}
+          </ol>
+
+          <aside className="cinematic-info">
+            <strong>Automatic cinematic transition</strong>
+            <p>We automatically animate still images, normalize videos, blend scenes smoothly and preserve video audio when available.</p>
+          </aside>
+
+          {media.length < CINEMATIC_MIN_FILES && phase !== "metadata" ? <p className="error">Select at least two images or videos.</p> : null}
+          {isWorking ? (
+            <div aria-live="polite">
+              <small>{stage}</small>
+              <div className="progress" aria-label="Cinematic transition progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress * 100)} role="progressbar">
+                <span style={{ width: `${Math.max(4, Math.round(progress * 100))}%` }} />
+              </div>
+            </div>
+          ) : null}
+          {error ? <p className="error" role="alert">{error}</p> : null}
+
+          {downloadUrl && phase === "complete" ? (
+            <div className="cinematic-result">
+              <video src={downloadUrl} controls preload="metadata">Your browser cannot preview this MP4.</video>
+              <div className="workspace-actions">
+                <a className="download" href={downloadUrl} download="lafryhi-cinematic-transition.mp4">Download MP4</a>
+                <button type="button" className="secondary" onClick={resetWorkspace}>Create another transition</button>
+              </div>
+            </div>
+          ) : (
+            <div className="workspace-actions">
+              <button type="button" onClick={generateTransition} disabled={!canGenerate}>{phase === "error" ? "Retry transition" : "Generate transition"}</button>
+            </div>
+          )}
+        </div>
+      ) : error ? <p className="error" role="alert">{error}</p> : null}
+    </section>
+  );
+}
+
 function ComingSoonWorkspace({ tool }: { tool: ToolDefinition }) {
   const [files, setFiles] = useState<File[]>([]);
   const [showPlaceholder, setShowPlaceholder] = useState(false);
@@ -778,6 +1178,10 @@ export function ToolWorkspace({ tool }: { tool: ToolDefinition }) {
 
   if (tool.route.slug === "trim-video") {
     return <TrimVideoWorkspace tool={tool} />;
+  }
+
+  if (tool.route.slug === "cinematic-transition") {
+    return <CinematicTransitionWorkspace tool={tool} />;
   }
 
   return <ComingSoonWorkspace tool={tool} />;

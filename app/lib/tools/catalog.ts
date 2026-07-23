@@ -28,6 +28,23 @@ export const tools = [
     options: TOOL_OPTION_SCHEMAS["trim-video"],
   },
   {
+    route: { slug: "cinematic-transition", path: "/tools/cinematic-transition" },
+    title: "Cinematic Transition",
+    description: "Seamlessly connect images and videos with automatic cinematic motion.",
+    helperText: "Upload two or three images or videos. We automatically create subtle camera movement, smooth crossfades and a ready-to-edit MP4.",
+    icon: "⇄",
+    status: "ready",
+    input: {
+      kind: "media",
+      accept: "image/jpeg,image/png,image/webp,video/mp4,video/webm,video/quicktime",
+      multiple: true,
+    },
+    output: { kind: "video", formatLabel: "MP4 video" },
+    analyticsCategory: "create",
+    seo: TOOL_SEO["cinematic-transition"],
+    options: TOOL_OPTION_SCHEMAS["cinematic-transition"],
+  },
+  {
     route: { slug: "compress-video", path: "/tools/compress-video" },
     title: "Compress Video",
     description: "Reduce video file size while preserving quality.",
