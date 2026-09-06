@@ -1,0 +1,30 @@
+{
+  "name": "lafryhi-video-factory-web",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit --incremental false",
+    "validate": "npm run lint && npm run typecheck && npm run build"
+  },
+  "dependencies": {
+    "@ffmpeg/core": "0.12.10",
+    "@ffmpeg/ffmpeg": "0.12.15",
+    "@ffmpeg/util": "0.12.2",
+    "next": "^15.4.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3.3.6",
+    "@types/node": "^22.10.2",
+    "@types/react": "^19.0.3",
+    "@types/react-dom": "^19.0.2",
+    "eslint": "^9.31.0",
+    "eslint-config-next": "^15.4.1",
+    "typescript": "^5.7.2"
+  }
+}

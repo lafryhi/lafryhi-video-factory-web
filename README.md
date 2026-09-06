@@ -1,84 +1,30 @@
-# LAFRYHI Video Factory Web
+# LAFRYHI Video Factory — Web Editor
 
-A privacy-first collection of free browser-based video tool pages.
+Build polished videos from images, narration, voice, music, captions and transitions, entirely in the browser. Media stays local until you export; rendering happens on the Railway render engine (FastAPI + FFmpeg).
 
-## Included in this implementation
+## Stack
 
-- Premium responsive landing page
-- Dedicated SEO route for each of 11 tools
-- No-account file selection workflow
-- Typed centralized tool registry for route, UI, SEO, readiness, input/output, analytics category and future option metadata
-- Working client-side **Merge Videos**, **Trim Video** and **Cinematic Transition** workflows powered by FFmpeg WebAssembly
-- Coming-soon processing placeholders for the remaining eight tools
-- Google Analytics 4 integration
-- Microsoft Clarity integration
-- Vercel-ready configuration
-- CI validation for linting, type checking, production builds and local validation
+- **Frontend** — Vite + React + TypeScript, deployed on Vercel at <https://lafryhi-video-factory-web.vercel.app/>
+- **Rendering backend** — FastAPI + FFmpeg on Railway at <https://lafryhi-video-factory-api-production.up.railway.app/>
 
-## Run locally
+## How the pieces connect
+
+The browser talks to the render engine through the same origin. Vercel rewrites `/api/*` to the Railway service (see `vercel.json`), so there is no cross-origin (CORS) dependency and no browser-side configuration is required. Set `VITE_API_BASE_URL` (see `.env.example`) only if you want the browser to call Railway directly.
+
+## Commands
 
 ```bash
 npm install
-cp .env.example .env.local
-npm run dev
+npm run dev          # local dev (proxies /api to http://127.0.0.1:8000)
+npm run test         # vitest
+npm run typecheck    # tsc --noEmit
+npm run build        # typecheck + tests + production build to dist/
 ```
 
-Open `http://localhost:3000`.
+## Feature coverage
 
-## Validate locally
+Project creation, storyboard scenes, timeline editing (cut/move/split/trim), image/media import, per-scene narration, voice track, background music, captions/text overlays, transitions, live preview, project save/load, portable `.lvf` project packages, landscape 16:9 and vertical 9:16 output, and video rendering/export via Railway.
 
-Run these checks before opening a pull request:
+## Note on the old three-tool toolbox
 
-```bash
-npm run lint
-npm run typecheck
-npm run build
-```
-
-Use `npm run validate` to run linting, type checking and the production build in sequence.
-
-## Analytics setup
-
-Create `.env.local` and add:
-
-```env
-NEXT_PUBLIC_GA_ID=G-XXXXXXXXXX
-NEXT_PUBLIC_CLARITY_ID=xxxxxxxxxx
-NEXT_PUBLIC_SITE_URL=https://video.lafryhi.com
-```
-
-Analytics counts visitors without requiring user accounts. GA4 is configured with IP anonymization. Clarity is optional.
-
-## Deployment
-
-1. Push the folder to a GitHub repository.
-2. Import the repository into Vercel.
-3. Add the three environment variables in Vercel Project Settings.
-4. Deploy.
-
-## Current tool status
-
-Live client-side processing:
-- Merge Videos
-- Trim Video
-- Cinematic Transition
-
-Coming soon:
-- Compress Video
-- Resize Video
-- Remove Audio
-- Convert to MP4
-- Extract Audio
-- Image to Video
-- Video Speed
-- Reverse Video
-
-Merge Videos, Trim Video and Cinematic Transition run fully in the browser. Files are not uploaded to a backend service, but FFmpeg assets are loaded by the browser and processing depends on device CPU, memory and browser WebAssembly support. Large clips, many clips, unsupported codecs or low-memory mobile browsers may fail and should be retried with smaller inputs.
-
-Trim Video accepts start and end times in seconds, including decimals, and exports the selected range as an H.264/AAC MP4. The start time must be zero or greater, and the end time must be greater than the start time.
-
-## Merge strategy
-
-The merge workflow intentionally does not use FFmpeg stream-copy concat as the default path because that approach is only reliable when every user-provided file has matching codecs, dimensions, time bases and stream layouts. User uploads are often mixed, so Merge Videos uses FFmpeg's concat demuxer with H.264/AAC re-encoding and exports an MP4 file.
-
-Re-encoding improves compatibility for the first working browser tool, but it can change quality, increase processing time and use significant memory. This project does not claim original-quality preservation for merged exports.
+The previous "Merge / Trim / Cinematic Transition" toolbox is preserved, unmodified, under `legacy-toolbox/`. It is no longer the primary interface and is not part of this build. The full source is also retained in this repository's git history and in the local backup folder.
