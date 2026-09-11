@@ -1,6 +1,27 @@
 @font-face { font-family: "Outfit"; src: url("/fonts/Outfit-Variable.ttf") format("truetype"); font-style: normal; font-weight: 100 900; font-display: swap; }
 @font-face { font-family: "Rubik"; src: url("/fonts/Rubik-Variable.ttf") format("truetype"); font-style: normal; font-weight: 300 900; font-display: swap; }
 
+.toolbar .flow-launch { position: absolute; right: 18px; bottom: 3px; height: 22px; min-height: 0; padding: 2px 8px; font-size: 10px; }
+.flow-dialog { width: min(1080px, 94vw); max-width: 94vw; max-height: 90vh; margin: auto; padding: 24px; overflow: auto; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); color: var(--text); box-shadow: var(--shadow); text-align: left; user-select: text; }
+.flow-dialog::backdrop { background: rgba(0, 0, 0, .7); }
+.flow-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.flow-header small { color: var(--accent-2); }
+.flow-dialog h1 { font-size: 22px; margin: 6px 0; }
+.flow-dialog h2 { font-size: 17px; margin: 0 0 14px; }
+.flow-dialog h3 { font-size: 14px; }
+.flow-dialog p { color: var(--muted); line-height: 1.6; max-width: none; }
+.flow-dialog [role="alert"] { color: var(--red); }
+.flow-card { padding: 18px; margin: 18px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
+.flow-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 14px 0; }
+.flow-dialog label { display: flex; flex-direction: column; gap: 7px; font-size: 12px; color: var(--muted); }
+.flow-dialog textarea, .flow-dialog input, .flow-dialog select { width: 100%; min-width: 0; padding: 10px; color: var(--text); background: var(--panel-3); border: 1px solid var(--line); border-radius: 7px; font: inherit; }
+.flow-dialog textarea { min-height: 90px; resize: vertical; line-height: 1.5; }
+.flow-dialog textarea:focus-visible { outline: 2px solid var(--accent); }
+.flow-dialog pre { white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.7 "Outfit", sans-serif; padding: 14px; border-radius: 8px; background: var(--bg); }
+.flow-dialog summary { cursor: pointer; font-weight: 600; line-height: 1.6; overflow-wrap: anywhere; }
+.flow-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 620px) { .flow-dialog { padding: 14px; } .flow-grid { grid-template-columns: 1fr; } .flow-header { align-items: start; flex-direction: column; } }
+
 :root {
   font-family: "Outfit", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   color-scheme: dark;

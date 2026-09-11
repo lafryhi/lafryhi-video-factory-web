@@ -1,4 +1,5 @@
 import { Clapperboard, FilePlus2, FolderOpen, Moon, Pause, Play, Redo2, Save, Sun, Undo2 } from "lucide-react";
+import { FlowProductionAssistant } from "./FlowProductionAssistant";
 
 type Props = {
   projectName: string;
@@ -36,6 +37,7 @@ export function Toolbar(props: Props) {
     </div>
     <div className="project-title"><span>{props.projectName}{props.dirty && <i className="dirty-dot" title="Unsaved changes"/>}</span><small>{props.busy ? "Working…" : props.dirty ? "Unsaved changes" : "Saved"}</small></div>
     <div className="toolbar-actions">
+      <FlowProductionAssistant/>
       <button data-testid="analyze" className="button ghost" onClick={props.onAnalyze} disabled={props.busy}>Analyze</button>
       <button data-testid="preview" className={`button ghost ${props.playing ? "active" : ""}`} onClick={props.onPreview} disabled={props.busy}>{props.playing ? <Pause size={16}/> : <Play size={16}/>} {props.playing ? "Pause" : "Play now"}</button>
       <button data-testid="export" className="button primary" onClick={props.onExport} disabled={props.busy}><Clapperboard size={16}/> Export video</button>

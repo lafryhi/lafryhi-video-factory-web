@@ -7,6 +7,7 @@ import { ExportProgressPopup, PackageProgressPopup, usePopups, type ExportPopupS
 import { PreviewPanel } from "./components/PreviewPanel";
 import { TimelineEditor } from "./components/TimelineEditor";
 import { Toolbar } from "./components/Toolbar";
+import { FlowProductionAssistant } from "./components/FlowProductionAssistant";
 import { audioSegments, buildLocalTimeline, cutSelectedTimelineClip, DEFAULT_AUDIO_REMOVED_RANGES, DEFAULT_AUDIO_TIMELINE_CUTS, DEFAULT_AUDIO_TIMELINE_GAPS, DEFAULT_IMAGE_CROP, duplicateScene, moveAudioTimelineClip, normalizeAudioTimelineCuts, normalizeProject, patchScene, progressFraction, removeScene as removeSceneFromProject, removeTimelineRange, removeTimelineSelections, reorderScenes, sceneAtTime, setSceneDuration, splitScene, timelineSelectionKey, totalDuration, updateAssignment } from "./domain";
 import { useProjectHistory } from "./hooks";
 import { createLvfPackage, isLvfPackage, openLvfPackage } from "./projectPackage";
@@ -521,7 +522,7 @@ export default function App() {
   const [capabilities, setCapabilities] = useState<Capabilities | null>(null);
   const [startupError, setStartupError] = useState<string | null>(null);
   useEffect(() => { api.capabilities().then(setCapabilities).catch((reason) => setStartupError(String(reason))); }, []);
-  if (startupError) return <div className="startup"><div className="startup-logo">VF</div><h1>Could not connect to the video engine</h1><p>{startupError}</p><p>Start the FastAPI service, then reload this page.</p></div>;
+  if (startupError) return <div className="startup"><div className="startup-logo">VF</div><h1>Could not connect to the video engine</h1><p>{startupError}</p><p>Start the FastAPI service, then reload this page.</p><FlowProductionAssistant/></div>;
   if (!capabilities) return <div className="startup"><div className="startup-logo">VF</div><h1>Starting Video Factory…</h1><p>Preparing your private browser-local editing workspace.</p></div>;
   return <Editor capabilities={capabilities}/>;
 }
