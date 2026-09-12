@@ -3,3 +3,6 @@
 node_modules
 dist
 .DS_Store
+.pytest_tmp
+__pycache__
+*.pyc

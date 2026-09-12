@@ -8,7 +8,7 @@ import { ProSlider } from "./ProSlider";
 
 function ClipImage({ scene }: { scene: Scene }) {
   const url = useFileUrl(scene.imagePath);
-  return url ? <img src={url} alt="" draggable={false}/> : null;
+  return url ? scene.mediaType === "video" ? <video src={url} muted preload="metadata"/> : <img src={url} alt="" draggable={false}/> : null;
 }
 
 function trimLabel(start = 0, end: number | null = null): string {

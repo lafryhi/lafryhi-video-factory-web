@@ -1,4 +1,5 @@
 import type { AudioTimelineCuts, AudioTimelineGap, AudioTimelineGaps, AudioTimelineRemovedRanges, ImageCrop, Project, Scene, Timeline, TimelineRangeSelection, TimelineSelection, TimelineTimeRange } from "./types";
+import { sliceVideoScene } from "./aiEditor";
 
 export const DEFAULT_IMAGE_CROP: ImageCrop = { enabled: false, x: 50, y: 50, zoom: 1 };
 export const DEFAULT_AUDIO_TIMELINE_CUTS: AudioTimelineCuts = { voice: [], music: [], narration: {} };
@@ -345,6 +346,12 @@ export function removeTimelineRange(project: Project, selection: TimelineRangeSe
     };
   }
   const removedDuration = localEnd - localStart;
+  if (scene.mediaType === "video") {
+    const pieces: Scene[] = [];
+    if (localStart >= .1) pieces.push(sliceVideoScene(scene, 0, localStart));
+    if (sceneLength - localEnd >= .1) pieces.push(sliceVideoScene(scene, localEnd, sceneLength, pieces.length ? crypto.randomUUID() : scene.sceneId));
+    return { ...project, scenes: project.scenes.flatMap(s => s.sceneId === scene.sceneId ? pieces : [s]), audioTiming: { ...project.audioTiming, mode: "manual" } };
+  }
   if (sceneLength - removedDuration < .25) return removeScene(project, selection.sceneId);
   const nextDuration = sceneLength - removedDuration;
   const total = totalDuration(project, timeline);
@@ -454,7 +461,8 @@ export function setSceneDuration(scenes: Scene[], sceneId: string, duration: num
 
 function validSceneTiming(scene: Scene, patch: Partial<Scene> = {}): Scene {
   const merged = { ...scene, ...patch };
-  const durationSeconds = clamp(merged.durationSeconds, 0.25, 3600);
+  const maximum = merged.mediaType === "video" ? Math.max(.1, (merged.sourceEndSeconds ?? merged.sourceDurationSeconds ?? 1800) - (merged.sourceStartSeconds || 0)) : 3600;
+  const durationSeconds = clamp(merged.durationSeconds, merged.mediaType === "video" ? .1 : .25, maximum);
   const requestedTransition = clamp(merged.transitionDurationSeconds, 0, 3600);
   const transitionDurationSeconds = requestedTransition >= durationSeconds ? durationSeconds / 2 : requestedTransition;
   return { ...merged, durationSeconds, transitionDurationSeconds, crop: normalizeImageCrop(merged.crop) };
@@ -478,6 +486,10 @@ export function splitScene(scenes: Scene[], sceneId: string, playhead?: number):
   const start = scenes.slice(0, index).reduce((sum, scene) => sum + scene.durationSeconds, 0);
   const requested = playhead === undefined ? scenes[index].durationSeconds / 2 : playhead - start;
   const firstDuration = clamp(requested, .25, scenes[index].durationSeconds - .25);
+  if (scenes[index].mediaType === "video") {
+    const scene = scenes[index];
+    return scenes.flatMap((s, i) => i === index ? [sliceVideoScene(scene, 0, firstDuration), sliceVideoScene(scene, firstDuration, scene.durationSeconds, crypto.randomUUID())] : [s]);
+  }
   const first = validSceneTiming(scenes[index], { durationSeconds: firstDuration });
   const second = validSceneTiming({ ...scenes[index], sceneId: globalThis.crypto?.randomUUID?.() ?? `scene-${Date.now()}` }, { durationSeconds: scenes[index].durationSeconds - firstDuration });
   const copy = [...scenes];

@@ -15,6 +15,7 @@ const MAX_ENTRIES = 20_000;
 const TOKEN_PREFIX = "lvf:asset:";
 
 const extensions: Record<LocalAssetKind, Set<string>> = {
+  video: new Set([".mp4", ".mov", ".webm", ".mkv"]),
   image: new Set([".bmp", ".gif", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"]),
   voice: new Set([".aac", ".flac", ".m4a", ".mp3", ".ogg", ".wav"]),
   music: new Set([".aac", ".flac", ".m4a", ".mp3", ".ogg", ".wav"]),
@@ -162,7 +163,7 @@ function generateZipBlob(zip: JSZip, options: PackageProgressOptions): Promise<B
 
 function collectReferences(project: Project): MediaReference[] {
   const references: MediaReference[] = project.scenes.map((scene) => ({
-    source: scene.imagePath, kind: "image" as const, required: true,
+    source: scene.imagePath, kind: (scene.mediaType === "video" ? "video" : "image") as LocalAssetKind, required: true,
     set: (value: string) => { scene.imagePath = value; },
   }));
   if (project.voiceFile) references.push({ source: project.voiceFile, kind: "voice", required: false, set: (value) => { project.voiceFile = value; } });
@@ -363,7 +364,7 @@ function hydrateProject(project: Partial<Project>, manifest: LvfManifest, resolv
     return local;
   };
   const hydrated = structuredClone(project) as Partial<Project>;
-  hydrated.scenes = hydrated.scenes!.map((scene) => ({ ...scene, imagePath: read(scene.imagePath, "image", true) }));
+  hydrated.scenes = hydrated.scenes!.map((scene) => ({ ...scene, imagePath: read(scene.imagePath, scene.mediaType === "video" ? "video" : "image", true) }));
   hydrated.voiceFile = read(hydrated.voiceFile, "voice", false);
   hydrated.musicFile = read(hydrated.musicFile, "music", false);
   hydrated.narrationMapping = {

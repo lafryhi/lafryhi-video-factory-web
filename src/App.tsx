@@ -8,6 +8,7 @@ import { PreviewPanel } from "./components/PreviewPanel";
 import { TimelineEditor } from "./components/TimelineEditor";
 import { Toolbar } from "./components/Toolbar";
 import { FlowProductionAssistant } from "./components/FlowProductionAssistant";
+import { aiEditorApi, appendAIEdit } from "./aiEditor";
 import { audioSegments, buildLocalTimeline, cutSelectedTimelineClip, DEFAULT_AUDIO_REMOVED_RANGES, DEFAULT_AUDIO_TIMELINE_CUTS, DEFAULT_AUDIO_TIMELINE_GAPS, DEFAULT_IMAGE_CROP, duplicateScene, moveAudioTimelineClip, normalizeAudioTimelineCuts, normalizeProject, patchScene, progressFraction, removeScene as removeSceneFromProject, removeTimelineRange, removeTimelineSelections, reorderScenes, sceneAtTime, setSceneDuration, splitScene, timelineSelectionKey, totalDuration, updateAssignment } from "./domain";
 import { useProjectHistory } from "./hooks";
 import { createLvfPackage, isLvfPackage, openLvfPackage } from "./projectPackage";
@@ -235,12 +236,16 @@ function Editor({ capabilities }: { capabilities: Capabilities }) {
 
   async function materializeProject(signal: AbortSignal): Promise<Project> {
     const prepared = structuredClone(project);
-    const localScenes = prepared.scenes.map((scene, index) => ({ scene, index, asset: getLocalAsset(scene.imagePath) })).filter((item) => item.asset);
+    const localScenes = prepared.scenes.map((scene, index) => ({ scene, index, asset: getLocalAsset(scene.imagePath) })).filter((item) => item.asset && item.scene.mediaType !== "video");
     if (localScenes.length) {
       setExportStage(`Uploading ${localScenes.length} image${localScenes.length === 1 ? "" : "s"}`, .035);
       const uploaded = await api.uploadImages(project.sessionId, localScenes.map((item) => item.asset!.file), signal);
       localScenes.forEach((item, uploadIndex) => { prepared.scenes[item.index].imagePath = uploaded.scenes[uploadIndex].imagePath; });
       prepared.imagesFolder = uploaded.folder;
+    }
+    for (const scene of prepared.scenes.filter(s => s.mediaType === "video")) {
+      const asset = getLocalAsset(scene.imagePath);
+      if (asset) scene.imagePath = (await aiEditorApi.upload(project.sessionId, asset.file)).path;
     }
     let uploadProgress = .055;
     for (const field of ["voiceFile", "musicFile"] as const) {
@@ -506,7 +511,7 @@ function Editor({ capabilities }: { capabilities: Capabilities }) {
       <input data-testid="scene-narration-upload" ref={sceneNarrationInput} type="file" accept={audioAccept} onChange={(event) => { chooseNarration(event.target.files?.[0]); event.target.value = ""; }}/>
       <input data-testid="project-upload" ref={openInput} type="file" accept=".lvf,.lafryhi,.json,application/zip,application/json" onChange={(event) => { void openProject(event.target.files?.[0]); event.target.value = ""; }}/>
     </div>
-    <Toolbar projectName={projectName} dirty={isDirty} busy={busy} playing={playing} theme={theme} canUndo={canUndo} canRedo={canRedo} onNew={() => void createNew()} onOpen={() => void requestOpen()} onSave={() => void save()} onUndo={undo} onRedo={redo} onAnalyze={analyze} onPreview={togglePreview} onExport={() => void exportVideo()} onTheme={() => setTheme(theme === "dark" ? "light" : "dark")}/>
+    <Toolbar sessionId={project.sessionId} onAIApply={(result) => { setProject(current => appendAIEdit(current, result)); setTimeline(null); setPlaying(false); }} projectName={projectName} dirty={isDirty} busy={busy} playing={playing} theme={theme} canUndo={canUndo} canRedo={canRedo} onNew={() => void createNew()} onOpen={() => void requestOpen()} onSave={() => void save()} onUndo={undo} onRedo={redo} onAnalyze={analyze} onPreview={togglePreview} onExport={() => void exportVideo()} onTheme={() => setTheme(theme === "dark" ? "light" : "dark")}/>
     <div className="workspace">
       <MediaLibrary project={project} selectedId={selectedId} onSelect={selectScene} onImportImages={() => void requestImages()} onVoice={() => voiceInput.current?.click()} onMusic={() => musicInput.current?.click()} onNarrationFolder={() => narrationFolderInput.current?.click()} onDemo={(orientation) => void loadDemo(orientation)} onReorder={reorder} onDropImages={(files) => importImages(files, true)} onDropAudio={chooseAudio}/>
       <PreviewPanel project={project} scene={previewScene} sceneProgress={previewProgress} timeline={timeline} playhead={playhead} playing={playing} onPlayhead={(value) => { setPlaying(false); setPlayhead(value); }} onToggle={togglePreview}/>

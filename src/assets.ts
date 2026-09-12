@@ -1,4 +1,4 @@
-export type LocalAssetKind = "image" | "voice" | "music" | "narration";
+export type LocalAssetKind = "image" | "video" | "voice" | "music" | "narration";
 type LocalAsset = { id: string; file: File; url: string; kind: LocalAssetKind; name: string };
 
 const assets = new Map<string, LocalAsset>();

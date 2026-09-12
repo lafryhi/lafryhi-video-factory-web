@@ -1,0 +1,8 @@
+node_modules
+.git
+.venv
+dist
+backend/data
+**/__pycache__
+.env*
+legacy-toolbox

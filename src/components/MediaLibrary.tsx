@@ -10,7 +10,7 @@ function Thumbnail({ scene, index, selected, onSelect, onReorder }: { scene: Sce
     onDragStart={(event) => { event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("application/x-lafryhi-scene", scene.sceneId); }}
     onDragOver={(event) => { if (event.dataTransfer.types.includes("application/x-lafryhi-scene")) event.preventDefault(); }}
     onDrop={(event) => { const from = event.dataTransfer.getData("application/x-lafryhi-scene"); if (from) { event.preventDefault(); event.stopPropagation(); onReorder(from, scene.sceneId); } }}>
-    <span className="thumb">{url && <img src={url} alt=""/>}</span>
+    <span className="thumb">{url && (scene.mediaType === "video" ? <video src={url} muted preload="metadata"/> : <img src={url} alt=""/>)}</span>
     <span><strong>{assetName(scene.imagePath)}</strong><small>{scene.durationSeconds.toFixed(1)}s · {scene.motion.replace(/([A-Z])/g, " $1").trim()}</small></span>
   </button>;
 }

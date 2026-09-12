@@ -1,4 +1,12 @@
 export type Scene = {
+  mediaType?: "image" | "video";
+  sourceStartSeconds?: number;
+  sourceEndSeconds?: number;
+  sourceDurationSeconds?: number;
+  sourceAudio?: boolean;
+  aiVideo?: import("./aiEditor").AIEditPlan["video"];
+  aiAudio?: import("./aiEditor").AIEditPlan["audio"];
+  subtitleStyle?: import("./aiEditor").AIEditPlan["subtitleStyle"];
   sceneId: string;
   imagePath: string;
   durationSeconds: number;
@@ -74,6 +82,7 @@ export type TimelineRangeSelection =
   | { kind: "voice" | "music"; startSeconds: number; endSeconds: number };
 
 export type Project = {
+  aiEdits?: { analysisId: string; plan: import("./aiEditor").AIEditPlan }[];
   schemaVersion: number;
   sessionId: string;
   baseDir: string;
