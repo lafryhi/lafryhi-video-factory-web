@@ -3,7 +3,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://lafryhi-video-factory-api-production.up.railway.app/api/:path*"
+      "destination": "https://lafryhi-video-factory-api-production-4616.up.railway.app/api/:path*"
     }
   ]
 }
