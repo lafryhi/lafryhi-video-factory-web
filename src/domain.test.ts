@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { audioSegments, audioSourceAtTimeline, audioTrackLayout, buildLocalTimeline, cutSelectedTimelineClip, duplicateScene, formatTime, moveAudioTimelineClip, normalizeAudioTrim, normalizeCutPoints, normalizeImageCrop, normalizeProject, normalizeTimeRanges, patchScene, progressFraction, removeScene, removeTimelineRange, removeTimelineSelections, reorderScenes, sceneDuration, setSceneDuration, splitScene, timelineSelectionRange, totalDuration, updateAssignment } from "./domain";
+import { audioSegments, audioSourceAtTimeline, audioTrackLayout, buildLocalTimeline, createLocalScene, cutSelectedTimelineClip, duplicateScene, formatTime, isImageFile, isMediaFile, isVideoFile, moveAudioTimelineClip, normalizeAudioTrim, normalizeCutPoints, normalizeImageCrop, normalizeProject, normalizeTimeRanges, patchScene, progressFraction, removeScene, removeTimelineRange, removeTimelineSelections, reorderScenes, sceneDuration, setSceneDuration, splitScene, timelineSelectionRange, totalDuration, updateAssignment } from "./domain";
 import type { Project, Scene } from "./types";
 
 const scene = (sceneId: string, durationSeconds: number): Scene => ({ sceneId, imagePath: `/${sceneId}.jpg`, durationSeconds, motion: "ZoomIn", motionIntensity: .25, startZoom: 1, endZoom: 1.15, transition: "fade", transitionDurationSeconds: .6, timingWeight: 1 });
@@ -140,4 +140,55 @@ describe("timeline domain", () => {
   it("uses resolved timeline durations", () => expect(totalDuration(project(), { timelineId: "x", fps: 30, totalFrames: 300, durationSeconds: 10, timingMode: "even", warnings: [], silenceBoundaries: [], narrationClips: [], scenes: [{ sceneId: "a", sourcePath: "/a", startFrame: 0, endFrame: 150, frameCount: 150, durationSeconds: 5, timingWeight: 1 }] })).toBe(12));
   it("creates and updates narration assignments", () => { const result = updateAssignment(project(), "b", { audioPath: "/b.wav", trimStartSeconds: 1 }); expect(result.narrationMapping.assignments[0]).toMatchObject({ sceneId: "b", audioPath: "/b.wav", trimStartSeconds: 1, enabled: true }); });
   it("merges nested defaults when opening older projects", () => { const defaults = project(); const result = normalizeProject({ outputName: "old.mp4", scenes: defaults.scenes, audioTiming: { ...defaults.audioTiming, mode: "even" } }, defaults); expect(result.outputName).toBe("old.mp4"); expect(result.narrationMapping.mismatchStrategy).toBe("outro"); expect(result.scenes[0].crop).toEqual({ enabled: false, x: 50, y: 50, zoom: 1 }); expect(result.voiceTrimStartSeconds).toBe(0); expect(result.audioTimelineCuts).toEqual({ voice: [], music: [], narration: {} }); expect(result.audioTimelineRemovedRanges).toEqual({ voice: [], music: [], narration: {} }); });
+
+  it("recognizes MP4, MOV, WebM, and image file types", () => {
+    expect(isVideoFile(new File([], "clip.mp4", { type: "video/mp4" }))).toBe(true);
+    expect(isVideoFile(new File([], "clip.MOV", { type: "video/quicktime" }))).toBe(true);
+    expect(isVideoFile(new File([], "clip.webm", { type: "video/webm" }))).toBe(true);
+    expect(isVideoFile(new File([], "photo.png", { type: "image/png" }))).toBe(false);
+
+    expect(isImageFile(new File([], "photo.png", { type: "image/png" }))).toBe(true);
+    expect(isImageFile(new File([], "photo.jpg", { type: "image/jpeg" }))).toBe(true);
+    expect(isImageFile(new File([], "clip.mp4", { type: "video/mp4" }))).toBe(false);
+
+    expect(isMediaFile(new File([], "clip.mp4", { type: "video/mp4" }))).toBe(true);
+    expect(isMediaFile(new File([], "photo.webp", { type: "image/webp" }))).toBe(true);
+    expect(isMediaFile(new File([], "notes.txt", { type: "text/plain" }))).toBe(false);
+  });
+
+  it("creates video scenes preserving original source audio and static motion", async () => {
+    const videoFile = new File(["dummy"], "scene-01.mp4", { type: "video/mp4" });
+    const created = await createLocalScene(videoFile);
+
+    expect(created.mediaType).toBe("video");
+    expect(created.sourceAudio).toBe(true);
+    expect(created.motion).toBe("Static");
+    expect(created.motionIntensity).toBe(0);
+    expect(created.startZoom).toBe(1);
+    expect(created.endZoom).toBe(1);
+    expect(created.transition).toBe("none");
+    expect(created.durationSeconds).toBeGreaterThan(0);
+    expect(created.sourceStartSeconds).toBe(0);
+  });
+
+  it("creates image scenes with Ken Burns motion", async () => {
+    const imageFile = new File(["dummy"], "photo-01.png", { type: "image/png" });
+    const created = await createLocalScene(imageFile);
+
+    expect(created.mediaType).toBe("image");
+    expect(created.durationSeconds).toBe(6);
+    expect(created.motion).toBe("ZoomIn");
+  });
+
+  it("preserves natural filename order 01, 02 ... 09 for multiple media imports", () => {
+    const rawNames = ["09_flow.mp4", "02_flow.mp4", "01_flow.mp4", "05_flow.mp4", "03_flow.mp4", "08_flow.mp4", "04_flow.mp4", "07_flow.mp4", "06_flow.mp4"];
+    const files = rawNames.map((name) => new File([], name, { type: "video/mp4" }));
+    const sorted = files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+    expect(sorted.map((f) => f.name)).toEqual([
+      "01_flow.mp4", "02_flow.mp4", "03_flow.mp4", "04_flow.mp4", "05_flow.mp4",
+      "06_flow.mp4", "07_flow.mp4", "08_flow.mp4", "09_flow.mp4"
+    ]);
+  });
 });
+

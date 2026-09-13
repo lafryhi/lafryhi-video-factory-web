@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Project } from "../types";
@@ -38,4 +38,34 @@ describe("MediaLibrary demo variants", () => {
     expect(onDemo).toHaveBeenNthCalledWith(1, "landscape");
     expect(onDemo).toHaveBeenNthCalledWith(2, "portrait");
   });
+
+  it("displays 'Import media' and supported formats when empty", () => {
+    render(<MediaLibrary project={project} selectedId={null} onSelect={() => {}} onImportImages={() => {}} onVoice={() => {}} onMusic={() => {}} onNarrationFolder={() => {}} onDemo={() => {}} onReorder={() => {}} onDropImages={() => {}} onDropAudio={() => {}}/>);
+
+    expect(screen.getByText("Import media")).toBeInTheDocument();
+    expect(screen.getByText("MP4, MOV, WebM, PNG, JPG, WebP")).toBeInTheDocument();
+  });
+
+  it("accepts video files through drag and drop", () => {
+    const onDropImages = vi.fn();
+    const { container } = render(<MediaLibrary project={project} selectedId={null} onSelect={() => {}} onImportImages={() => {}} onVoice={() => {}} onMusic={() => {}} onNarrationFolder={() => {}} onDemo={() => {}} onReorder={() => {}} onDropImages={onDropImages} onDropAudio={() => {}}/>);
+
+    const videoFile = new File(["dummy video"], "flow-clip-01.mp4", { type: "video/mp4" });
+    const panel = container.querySelector(".media-panel")!;
+
+    const dragEvent = {
+      dataTransfer: {
+        files: [videoFile],
+        types: ["Files"],
+      },
+      preventDefault: vi.fn(),
+    };
+
+    fireEvent.dragEnter(panel, dragEvent);
+    fireEvent.drop(panel, dragEvent);
+
+    expect(onDropImages).toHaveBeenCalledTimes(1);
+    expect(onDropImages).toHaveBeenCalledWith([videoFile]);
+  });
 });
+

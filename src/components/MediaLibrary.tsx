@@ -1,6 +1,7 @@
 import { FileAudio, FolderPlus, ImagePlus, Mic2, Music2, Search } from "lucide-react";
 import { useMemo, useState, type DragEvent } from "react";
 import { assetName } from "../assets";
+import { isMediaFile } from "../domain";
 import { useFileUrl } from "../hooks";
 import type { Project, Scene } from "../types";
 
@@ -33,22 +34,22 @@ export function MediaLibrary(props: Props) {
   const [query, setQuery] = useState("");
   const [dropActive, setDropActive] = useState(false);
   const scenes = useMemo(() => props.project.scenes.filter((scene) => assetName(scene.imagePath).toLowerCase().includes(query.toLowerCase())), [props.project.scenes, query]);
-  const externalImages = (event: DragEvent) => [...event.dataTransfer.files].filter((file) => file.type.startsWith("image/"));
+  const externalMedia = (event: DragEvent) => [...event.dataTransfer.files].filter(isMediaFile);
   const dropAudio = (field: "voiceFile" | "musicFile", event: DragEvent<HTMLButtonElement>) => {
     const file = [...event.dataTransfer.files].find((item) => item.type.startsWith("audio/") || /\.(mp3|wav|m4a|aac|flac|ogg)$/i.test(item.name));
     if (file) { event.preventDefault(); event.stopPropagation(); props.onDropAudio(field, file); }
   };
   return <aside className={`media-panel panel ${dropActive ? "drop-active" : ""}`}
-    onDragEnter={(event) => { if (externalImages(event).length) setDropActive(true); }}
-    onDragOver={(event) => { if (externalImages(event).length) event.preventDefault(); }}
+    onDragEnter={(event) => { if (externalMedia(event).length) setDropActive(true); }}
+    onDragOver={(event) => { if (externalMedia(event).length) event.preventDefault(); }}
     onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node)) setDropActive(false); }}
-    onDrop={(event) => { const files = externalImages(event); setDropActive(false); if (files.length) { event.preventDefault(); props.onDropImages(files); } }}>
-    <div className="panel-heading"><div><span className="eyebrow">Assets</span><h2>Media library</h2></div><button data-testid="import-images" className="icon-button" onClick={props.onImportImages} title="Import image folder"><ImagePlus/></button></div>
+    onDrop={(event) => { const files = externalMedia(event); setDropActive(false); if (files.length) { event.preventDefault(); props.onDropImages(files); } }}>
+    <div className="panel-heading"><div><span className="eyebrow">Assets</span><h2>Media library</h2></div><button data-testid="import-images" className="icon-button" onClick={props.onImportImages} title="Import media"><ImagePlus/></button></div>
     <label className="search"><Search/><input data-testid="scene-search" aria-label="Search scenes" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search scenes"/></label>
     <div className="media-scroll">
       <div className="section-label"><span>SCENES</span><span>{props.project.scenes.length}</span></div>
       {scenes.length ? scenes.map((scene, index) => <Thumbnail key={scene.sceneId} scene={scene} index={index} selected={scene.sceneId === props.selectedId} onSelect={() => props.onSelect(scene.sceneId)} onReorder={props.onReorder}/>) :
-        <button data-testid="import-images-empty" className="empty-media" onClick={props.onImportImages}><FolderPlus/><strong>Import an image folder</strong><span>PNG, JPG, WebP and more</span></button>}
+        <button data-testid="import-images-empty" className="empty-media" onClick={props.onImportImages}><FolderPlus/><strong>Import media</strong><span>MP4, MOV, WebM, PNG, JPG, WebP</span></button>}
       <div className="section-label"><span>AUDIO</span></div>
       <button data-testid="voice-file" className="audio-item audio-drop" onClick={props.onVoice} onDragOver={(event) => event.preventDefault()} onDrop={(event) => dropAudio("voiceFile", event)}><Mic2/><span><strong>Main voice track</strong><small>{assetName(props.project.voiceFile)}</small><em>Drop MP3 here</em></span></button>
       <button data-testid="music-file" className="audio-item audio-drop" onClick={props.onMusic} onDragOver={(event) => event.preventDefault()} onDrop={(event) => dropAudio("musicFile", event)}><Music2/><span><strong>Background music</strong><small>{assetName(props.project.musicFile)}</small><em>Drop MP3 here</em></span></button>

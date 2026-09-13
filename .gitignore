@@ -4,5 +4,6 @@ node_modules
 dist
 .DS_Store
 .pytest_tmp
+.pytest_temp
 __pycache__
 *.pyc

@@ -47,6 +47,11 @@ export function Inspector(props: Props) {
           <label className="field"><span>Transition</span><select value={props.scene.transition} onChange={(event) => props.onScene({ transition: event.target.value })}><option value="fade">Fade</option><option value="none">None</option></select></label>
           <NumberField label="Transition length" value={props.scene.transitionDurationSeconds} max={props.scene.durationSeconds} onChange={(transitionDurationSeconds) => props.onScene({ transitionDurationSeconds })}/>
           <NumberField label="Timing weight" value={props.scene.timingWeight} min={.01} step={.1} onChange={(timingWeight) => props.onScene({ timingWeight })}/>
+          {props.scene.mediaType === "video" && (
+            <label className="check" style={{ marginTop: "6px" }}>
+              <input type="checkbox" checked={props.scene.sourceAudio !== false} onChange={(event) => props.onScene({ sourceAudio: event.target.checked })}/> Keep original video audio
+            </label>
+          )}
         </section>
         <ImageCropEditor imagePath={props.scene.imagePath} crop={props.scene.crop} portrait={props.project.videoFormat === "vertical_9_16"} onChange={(crop) => props.onScene({ crop })}/>
         <section className="settings-card text-settings"><div className="card-heading"><h3>Text overlays</h3><button data-testid="add-text" className="mini-action" onClick={props.onAddText}><Plus/> Add text</button></div>

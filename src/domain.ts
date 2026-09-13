@@ -1,5 +1,6 @@
 import type { AudioTimelineCuts, AudioTimelineGap, AudioTimelineGaps, AudioTimelineRemovedRanges, ImageCrop, Project, Scene, Timeline, TimelineRangeSelection, TimelineSelection, TimelineTimeRange } from "./types";
 import { sliceVideoScene } from "./aiEditor";
+import { registerAsset } from "./assets";
 
 export const DEFAULT_IMAGE_CROP: ImageCrop = { enabled: false, x: 50, y: 50, zoom: 1 };
 export const DEFAULT_AUDIO_TIMELINE_CUTS: AudioTimelineCuts = { voice: [], music: [], narration: {} };
@@ -544,3 +545,141 @@ export function updateAssignment(project: Project, sceneId: string, patch: Recor
   assignments.push({ ...merged, trimStartSeconds: trim.start, trimEndSeconds: trim.end });
   return { ...project, narrationMapping: { ...project.narrationMapping, assignments } };
 }
+
+export function isVideoFile(file: File): boolean {
+  return file.type.startsWith("video/") || /\.(mp4|mov|webm|mkv)$/i.test(file.name);
+}
+
+export function isImageFile(file: File): boolean {
+  return file.type.startsWith("image/") || /\.(bmp|gif|jpe?g|png|tiff?|webp)$/i.test(file.name);
+}
+
+export function isMediaFile(file: File): boolean {
+  return isVideoFile(file) || isImageFile(file);
+}
+
+export async function detectVideoMetadata(file: File): Promise<{ duration: number; width: number; height: number }> {
+  return new Promise((resolve) => {
+    if (typeof document === "undefined" || !document.createElement) {
+      resolve({ duration: 6, width: 1080, height: 1920 });
+      return;
+    }
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    let cleaned = false;
+    let url = "";
+    try {
+      url = URL.createObjectURL(file);
+    } catch {
+      resolve({ duration: 6, width: 1080, height: 1920 });
+      return;
+    }
+
+    const isTest = typeof navigator !== "undefined" && navigator.userAgent.includes("jsdom");
+    const timeoutMs = isTest ? 30 : 2500;
+    const timer = setTimeout(() => {
+      if (!cleaned) {
+        cleaned = true;
+        try { URL.revokeObjectURL(url); } catch {}
+        resolve({ duration: 6, width: 1080, height: 1920 });
+      }
+    }, timeoutMs);
+
+    video.onloadedmetadata = () => {
+      if (!cleaned) {
+        cleaned = true;
+        clearTimeout(timer);
+        const dur = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 6;
+        const w = video.videoWidth || 1080;
+        const h = video.videoHeight || 1920;
+        try { URL.revokeObjectURL(url); } catch {}
+        resolve({ duration: dur, width: w, height: h });
+      }
+    };
+
+    video.onerror = () => {
+      if (!cleaned) {
+        cleaned = true;
+        clearTimeout(timer);
+        try { URL.revokeObjectURL(url); } catch {}
+        resolve({ duration: 6, width: 1080, height: 1920 });
+      }
+    };
+
+    video.src = url;
+  });
+}
+
+export async function createLocalScene(file: File): Promise<Scene & { width?: number; height?: number }> {
+  if (isVideoFile(file)) {
+    const meta = await detectVideoMetadata(file);
+    const duration = Math.max(0.1, Number(meta.duration.toFixed(3)));
+    const isVertical = meta.height > meta.width;
+    return {
+      sceneId: crypto.randomUUID(),
+      imagePath: registerAsset(file, "video"),
+      mediaType: "video",
+      durationSeconds: duration,
+      sourceStartSeconds: 0,
+      sourceEndSeconds: duration,
+      sourceDurationSeconds: duration,
+      sourceAudio: true,
+      aiAudio: { crossfadeMs: 40, normalize: true },
+      aiVideo: { colorPreset: "original", cropMode: isVertical ? "fit" : "center" },
+      subtitleStyle: { fontSize: 48, position: "bottom", background: true, outline: 2, maxCharsPerLine: 38 },
+      motion: "Static",
+      motionIntensity: 0,
+      startZoom: 1,
+      endZoom: 1,
+      transition: "none",
+      transitionDurationSeconds: 0,
+      timingWeight: 1,
+      crop: { ...DEFAULT_IMAGE_CROP, enabled: false },
+      texts: [],
+      width: meta.width,
+      height: meta.height,
+    };
+  }
+  return {
+    sceneId: crypto.randomUUID(),
+    imagePath: registerAsset(file, "image"),
+    mediaType: "image",
+    durationSeconds: 6,
+    motion: "ZoomIn",
+    motionIntensity: .25,
+    startZoom: 1,
+    endZoom: 1.15,
+    transition: "fade",
+    transitionDurationSeconds: .6,
+    timingWeight: 1,
+    crop: { ...DEFAULT_IMAGE_CROP },
+    texts: [],
+  };
+}
+
+export function localScene(file: File): Scene {
+  const isVideo = isVideoFile(file);
+  return {
+    sceneId: crypto.randomUUID(),
+    imagePath: registerAsset(file, isVideo ? "video" : "image"),
+    mediaType: isVideo ? "video" : "image",
+    durationSeconds: 6,
+    sourceStartSeconds: 0,
+    sourceEndSeconds: 6,
+    sourceDurationSeconds: 6,
+    sourceAudio: true,
+    aiAudio: { crossfadeMs: 40, normalize: true },
+    aiVideo: { colorPreset: "original", cropMode: "fit" },
+    subtitleStyle: { fontSize: 48, position: "bottom", background: true, outline: 2, maxCharsPerLine: 38 },
+    motion: isVideo ? "Static" : "ZoomIn",
+    motionIntensity: isVideo ? 0 : .25,
+    startZoom: 1,
+    endZoom: isVideo ? 1 : 1.15,
+    transition: isVideo ? "none" : "fade",
+    transitionDurationSeconds: isVideo ? 0 : .6,
+    timingWeight: 1,
+    crop: { ...DEFAULT_IMAGE_CROP, enabled: false },
+    texts: [],
+  };
+}
+

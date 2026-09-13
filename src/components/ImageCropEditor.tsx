@@ -38,7 +38,11 @@ export function ImageCropEditor({ imagePath, crop: rawCrop, portrait, onChange }
       onPointerCancel={() => setDragging(false)}
       title="Drag to choose the part of the image to keep"
     >
-      {imageUrl && <img src={imageUrl} alt="Crop preview" draggable={false} style={{ objectPosition: `${crop.x}% ${crop.y}%`, transform: `scale(${crop.zoom})`, transformOrigin: `${crop.x}% ${crop.y}%` }}/>} 
+      {imageUrl && (/\.(mp4|mov|webm|mkv)/i.test(imagePath) || imagePath.includes(":video:") ? (
+        <video src={imageUrl} muted preload="metadata" style={{ objectPosition: `${crop.x}% ${crop.y}%`, transform: `scale(${crop.zoom})`, transformOrigin: `${crop.x}% ${crop.y}%` }}/>
+      ) : (
+        <img src={imageUrl} alt="Crop preview" draggable={false} style={{ objectPosition: `${crop.x}% ${crop.y}%`, transform: `scale(${crop.zoom})`, transformOrigin: `${crop.x}% ${crop.y}%` }}/>
+      ))}
       <span className="crop-grid"/><span className="crop-focus" style={{ left: `${crop.x}%`, top: `${crop.y}%` }}><Focus/></span>
     </div>
     <p className="crop-help">Drag the focus point, then zoom until only the part you want remains. The original image stays untouched.</p>

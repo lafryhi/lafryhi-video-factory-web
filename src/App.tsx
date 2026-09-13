@@ -9,20 +9,16 @@ import { TimelineEditor } from "./components/TimelineEditor";
 import { Toolbar } from "./components/Toolbar";
 import { FlowProductionAssistant } from "./components/FlowProductionAssistant";
 import { aiEditorApi, appendAIEdit } from "./aiEditor";
-import { audioSegments, buildLocalTimeline, cutSelectedTimelineClip, DEFAULT_AUDIO_REMOVED_RANGES, DEFAULT_AUDIO_TIMELINE_CUTS, DEFAULT_AUDIO_TIMELINE_GAPS, DEFAULT_IMAGE_CROP, duplicateScene, moveAudioTimelineClip, normalizeAudioTimelineCuts, normalizeProject, patchScene, progressFraction, removeScene as removeSceneFromProject, removeTimelineRange, removeTimelineSelections, reorderScenes, sceneAtTime, setSceneDuration, splitScene, timelineSelectionKey, totalDuration, updateAssignment } from "./domain";
+import { audioSegments, buildLocalTimeline, createLocalScene, cutSelectedTimelineClip, DEFAULT_AUDIO_REMOVED_RANGES, DEFAULT_AUDIO_TIMELINE_CUTS, DEFAULT_AUDIO_TIMELINE_GAPS, DEFAULT_IMAGE_CROP, duplicateScene, isMediaFile, localScene, moveAudioTimelineClip, normalizeAudioTimelineCuts, normalizeProject, patchScene, progressFraction, removeScene as removeSceneFromProject, removeTimelineRange, removeTimelineSelections, reorderScenes, sceneAtTime, setSceneDuration, splitScene, timelineSelectionKey, totalDuration, updateAssignment } from "./domain";
 import { useProjectHistory } from "./hooks";
 import { createLvfPackage, isLvfPackage, openLvfPackage } from "./projectPackage";
 import { isDesktopRuntime, openDesktopVideo } from "./runtime";
 import type { Capabilities, NarrationAssignment, Project, Scene, TextOverlay, Timeline, TimelineRangeSelection, TimelineSelection } from "./types";
 
 const audioAccept = ".wav,.mp3,.m4a,.aac,.flac,.ogg";
-const imageAccept = ".bmp,.gif,.jpeg,.jpg,.png,.tif,.tiff,.webp";
+const mediaAccept = ".mp4,.mov,.webm,.mkv,.bmp,.gif,.jpeg,.jpg,.png,.tif,.tiff,.webp,video/*,image/*";
 const emptyExport: ExportPopupState = { open: false, status: "running", progress: 0, stage: "Preparing export", logs: [] };
 const emptyPackage: PackagePopupState = { open: false, mode: "save", status: "running", progress: 0, stage: "Preparing project" };
-
-function localScene(file: File): Scene {
-  return { sceneId: crypto.randomUUID(), imagePath: registerAsset(file, "image"), durationSeconds: 6, motion: "ZoomIn", motionIntensity: .25, startZoom: 1, endZoom: 1.15, transition: "fade", transitionDurationSeconds: .6, timingWeight: 1, crop: { ...DEFAULT_IMAGE_CROP }, texts: [] };
-}
 
 function messageOf(reason: unknown) {
   return reason instanceof Error ? reason.message : String(reason);
@@ -73,7 +69,6 @@ function Editor({ capabilities }: { capabilities: Capabilities }) {
     localStorage.setItem("lafryhi-theme", theme);
   }, [theme]);
   useEffect(() => {
-    imageInput.current?.setAttribute("webkitdirectory", "");
     narrationFolderInput.current?.setAttribute("webkitdirectory", "");
   }, []);
   useEffect(() => {
@@ -162,15 +157,54 @@ function Editor({ capabilities }: { capabilities: Capabilities }) {
     finally { setBusy(false); }
   }, [popups]);
 
-  function importImages(files: File[], append = false) {
-    const valid = files.filter((file) => file.type.startsWith("image/") || /\.(bmp|gif|jpe?g|png|tiff?|webp)$/i.test(file.name)).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-    if (!valid.length) { void popups.alert({ tone: "warning", title: "These files cannot be added", message: "Choose PNG, JPG, WebP, GIF, BMP, or TIFF images.", detail: "Audio and unsupported files were ignored." }); return; }
-    const scenes = valid.map(localScene);
-    setProject((current) => ({ ...current, imagesFolder: "Browser-local media", scenes: append ? [...current.scenes, ...scenes] : scenes, ...(!append ? { audioTimelineCuts: { ...DEFAULT_AUDIO_TIMELINE_CUTS }, audioTimelineRemovedRanges: { ...DEFAULT_AUDIO_REMOVED_RANGES }, audioTimelineGaps: { ...DEFAULT_AUDIO_TIMELINE_GAPS } } : {}) }));
+  async function importMedia(files: File[], append = false) {
+    const valid = files.filter(isMediaFile).sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+    if (!valid.length) {
+      void popups.alert({
+        tone: "warning",
+        title: "These files cannot be added",
+        message: "Choose MP4, MOV, WebM, PNG, JPG, WebP, GIF, BMP, or TIFF files.",
+        detail: "Audio and unsupported files were ignored."
+      });
+      return;
+    }
+    const created = await Promise.all(valid.map(createLocalScene));
+    const hasAnyVideo = created.some((s) => s.mediaType === "video");
+    const hasVerticalVideo = created.some((s) => s.mediaType === "video" && (s.height || 0) > (s.width || 0));
+    const scenes: Scene[] = created.map(({ width, height, ...s }) => s);
+
+    setProject((current) => {
+      const shouldSwitchToVertical = hasVerticalVideo && (!append || current.scenes.length === 0);
+      return {
+        ...current,
+        imagesFolder: "Browser-local media",
+        scenes: append ? [...current.scenes, ...scenes] : scenes,
+        ...(shouldSwitchToVertical ? { videoFormat: "vertical_9_16", resolution: "1080x1920" } : {}),
+        ...(hasAnyVideo ? { audioTiming: { ...current.audioTiming, mode: "manual" } } : {}),
+        ...(!append ? {
+          audioTimelineCuts: { ...DEFAULT_AUDIO_TIMELINE_CUTS },
+          audioTimelineRemovedRanges: { ...DEFAULT_AUDIO_REMOVED_RANGES },
+          audioTimelineGaps: { ...DEFAULT_AUDIO_TIMELINE_GAPS }
+        } : {})
+      };
+    });
     if (scenes[0]) selectScene(scenes[0].sceneId); else { setSelectedId(null); setSelectedClips([]); }
     setTimeline(null); setPlaying(false); setPlayhead(0);
-    popups.toast({ tone: "success", title: `${scenes.length} image${scenes.length === 1 ? "" : "s"} ready`, message: "Stored locally in this browser. Nothing was uploaded." });
+
+    const videoCount = scenes.filter((s) => s.mediaType === "video").length;
+    const imageCount = scenes.length - videoCount;
+    const parts = [
+      videoCount ? `${videoCount} video${videoCount === 1 ? "" : "s"}` : "",
+      imageCount ? `${imageCount} image${imageCount === 1 ? "" : "s"}` : ""
+    ].filter(Boolean);
+    popups.toast({
+      tone: "success",
+      title: `${parts.join(" and ") || `${scenes.length} item${scenes.length === 1 ? "" : "s"}`} ready`,
+      message: "Stored locally in this browser. Nothing was uploaded."
+    });
   }
+
+  const importImages = (files: File[], append = false) => { void importMedia(files, append); };
 
   function chooseAudio(field: "voiceFile" | "musicFile", file?: File) {
     if (!file) return;
@@ -219,14 +253,14 @@ function Editor({ capabilities }: { capabilities: Capabilities }) {
   }
 
   function analyze() {
-    if (!project.scenes.length) { void popups.alert({ tone: "warning", title: "Add images first", message: "The timeline needs at least one scene before it can be analyzed." }); return; }
+    if (!project.scenes.length) { void popups.alert({ tone: "warning", title: "Add media first", message: "The timeline needs at least one scene before it can be analyzed." }); return; }
     const resolved = buildLocalTimeline(project);
     setTimeline(resolved);
     popups.toast({ tone: "success", title: "Timeline ready", message: `${resolved.scenes.length} scenes · ${resolved.durationSeconds.toFixed(1)} seconds · processed locally.` });
   }
 
   function togglePreview() {
-    if (!project.scenes.length) { void popups.alert({ tone: "warning", title: "Nothing to preview yet", message: "Drop or import images, then press Play again." }); return; }
+    if (!project.scenes.length) { void popups.alert({ tone: "warning", title: "Nothing to preview yet", message: "Drop or import media, then press Play again." }); return; }
     setTimeline(buildLocalTimeline(project)); setPlaying((value) => !value);
   }
 
@@ -243,9 +277,30 @@ function Editor({ capabilities }: { capabilities: Capabilities }) {
       localScenes.forEach((item, uploadIndex) => { prepared.scenes[item.index].imagePath = uploaded.scenes[uploadIndex].imagePath; });
       prepared.imagesFolder = uploaded.folder;
     }
-    for (const scene of prepared.scenes.filter(s => s.mediaType === "video")) {
+    const videoScenes = prepared.scenes.filter(s => s.mediaType === "video");
+    for (let i = 0; i < videoScenes.length; i++) {
+      const scene = videoScenes[i];
       const asset = getLocalAsset(scene.imagePath);
-      if (asset) scene.imagePath = (await aiEditorApi.upload(project.sessionId, asset.file)).path;
+      if (asset) {
+        setExportStage(`Uploading video ${i + 1} of ${videoScenes.length}`, .04 + (i / videoScenes.length) * .05);
+        const uploaded = await aiEditorApi.upload(project.sessionId, asset.file);
+        scene.imagePath = uploaded.path;
+        if (uploaded.duration && uploaded.duration > 0) {
+          scene.sourceDurationSeconds = uploaded.duration;
+          if (scene.sourceEndSeconds === null || scene.sourceEndSeconds === undefined || scene.sourceEndSeconds > uploaded.duration) {
+            scene.sourceEndSeconds = uploaded.duration;
+          }
+          if (scene.durationSeconds > uploaded.duration) {
+            scene.durationSeconds = uploaded.duration;
+          }
+        }
+      }
+    }
+    if (videoScenes.length > 0) {
+      prepared.audioTiming = { ...prepared.audioTiming, mode: "manual" };
+      if (!prepared.imagesFolder) {
+        prepared.imagesFolder = "Browser-local media";
+      }
     }
     let uploadProgress = .055;
     for (const field of ["voiceFile", "musicFile"] as const) {
@@ -267,7 +322,7 @@ function Editor({ capabilities }: { capabilities: Capabilities }) {
   }
 
   async function exportVideo() {
-    if (!project.scenes.length) { await popups.alert({ tone: "warning", title: "Add images before exporting", message: "Your video needs at least one scene." }); return; }
+    if (!project.scenes.length) { await popups.alert({ tone: "warning", title: "Add media before exporting", message: "Your video needs at least one scene." }); return; }
     setPlaying(false); setBusy(true); cancelRequested.current = false;
     const controller = new AbortController(); exportController.current = controller;
     setExportPopup({ open: true, status: "running", progress: .01, stage: "Preparing your project", logs: [] });
@@ -304,7 +359,7 @@ function Editor({ capabilities }: { capabilities: Capabilities }) {
 
   async function save(): Promise<boolean> {
     if (!project.scenes.length) {
-      await popups.alert({ tone: "warning", title: "Add images before saving", message: "A complete LVF project needs at least one scene and its source image." });
+      await popups.alert({ tone: "warning", title: "Add media before saving", message: "A complete LVF project needs at least one scene." });
       return false;
     }
     let name = projectName;
@@ -347,7 +402,7 @@ function Editor({ capabilities }: { capabilities: Capabilities }) {
   }
 
   async function requestImages() {
-    if (!project.scenes.length || await guardUnsaved("Replace the current scene collection?", "Importing a new image folder replaces the scenes currently on the timeline.")) imageInput.current?.click();
+    if (!project.scenes.length || await guardUnsaved("Replace the current scene collection?", "Importing new media replaces the scenes currently on the timeline.")) imageInput.current?.click();
   }
 
   async function openProject(file?: File) {
@@ -504,7 +559,7 @@ function Editor({ capabilities }: { capabilities: Capabilities }) {
 
   return <div className="app-shell">
     <div className="hidden-inputs" aria-hidden="true">
-      <input data-testid="image-upload" ref={imageInput} type="file" accept={imageAccept} multiple onChange={(event) => { importImages([...event.target.files || []]); event.target.value = ""; }}/>
+      <input data-testid="image-upload" ref={imageInput} type="file" accept={mediaAccept} multiple onChange={(event) => { void importMedia([...event.target.files || []]); event.target.value = ""; }}/>
       <input data-testid="voice-upload" ref={voiceInput} type="file" accept={audioAccept} onChange={(event) => { chooseAudio("voiceFile", event.target.files?.[0]); event.target.value = ""; }}/>
       <input data-testid="music-upload" ref={musicInput} type="file" accept={audioAccept} onChange={(event) => { chooseAudio("musicFile", event.target.files?.[0]); event.target.value = ""; }}/>
       <input data-testid="narration-upload" ref={narrationFolderInput} type="file" accept={audioAccept} multiple onChange={(event) => { mapNarration([...event.target.files || []]); event.target.value = ""; }}/>
@@ -513,7 +568,7 @@ function Editor({ capabilities }: { capabilities: Capabilities }) {
     </div>
     <Toolbar sessionId={project.sessionId} onAIApply={(result) => { setProject(current => appendAIEdit(current, result)); setTimeline(null); setPlaying(false); }} projectName={projectName} dirty={isDirty} busy={busy} playing={playing} theme={theme} canUndo={canUndo} canRedo={canRedo} onNew={() => void createNew()} onOpen={() => void requestOpen()} onSave={() => void save()} onUndo={undo} onRedo={redo} onAnalyze={analyze} onPreview={togglePreview} onExport={() => void exportVideo()} onTheme={() => setTheme(theme === "dark" ? "light" : "dark")}/>
     <div className="workspace">
-      <MediaLibrary project={project} selectedId={selectedId} onSelect={selectScene} onImportImages={() => void requestImages()} onVoice={() => voiceInput.current?.click()} onMusic={() => musicInput.current?.click()} onNarrationFolder={() => narrationFolderInput.current?.click()} onDemo={(orientation) => void loadDemo(orientation)} onReorder={reorder} onDropImages={(files) => importImages(files, true)} onDropAudio={chooseAudio}/>
+      <MediaLibrary project={project} selectedId={selectedId} onSelect={selectScene} onImportImages={() => void requestImages()} onVoice={() => voiceInput.current?.click()} onMusic={() => musicInput.current?.click()} onNarrationFolder={() => narrationFolderInput.current?.click()} onDemo={(orientation) => void loadDemo(orientation)} onReorder={reorder} onDropImages={(files) => void importMedia(files, true)} onDropAudio={chooseAudio}/>
       <PreviewPanel project={project} scene={previewScene} sceneProgress={previewProgress} timeline={timeline} playhead={playhead} playing={playing} onPlayhead={(value) => { setPlaying(false); setPlayhead(value); }} onToggle={togglePreview}/>
       <Inspector project={project} scene={selected} capabilities={capabilities} onScene={patchSelected} onProject={patchProject} onTiming={patchTiming} onNarration={patchNarration} onChooseNarration={() => sceneNarrationInput.current?.click()} onChooseOutput={() => popups.toast({ tone: "info", title: "Export destination", message: "Media uploads only when Export is pressed and stays inside this project's private server workspace." })} onDuplicate={() => { if (!selectedId) return; const scenes = duplicateScene(project.scenes, selectedId); setProject({ ...project, scenes }); selectScene(scenes[scenes.findIndex((item) => item.sceneId === selectedId) + 1]?.sceneId || selectedId); setTimeline(null); }} onRemove={() => selectedId && void requestRemoveScene(selectedId)} onAddText={addText} onText={patchText} onRemoveText={removeText}/>
     </div>

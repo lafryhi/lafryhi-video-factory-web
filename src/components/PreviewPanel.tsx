@@ -104,8 +104,9 @@ export function PreviewPanel(props: Props) {
     const target = (props.scene?.sourceStartSeconds || 0) + localTime;
     if (Math.abs(video.currentTime - target) > .12) video.currentTime = target;
     video.muted = props.scene?.sourceAudio === false;
+    video.volume = 1;
     if (props.playing) void video.play().catch(() => {}); else video.pause();
-  }, [imageUrl, props.scene?.sceneId, localTime, props.playing]);
+  }, [imageUrl, props.scene?.sceneId, localTime, props.playing, props.scene?.sourceAudio]);
 
   const seek = (value: number) => {
     props.onPlayhead(value);
@@ -115,7 +116,7 @@ export function PreviewPanel(props: Props) {
   return <main className="preview-panel panel">
     <div className="preview-heading"><div><span className="eyebrow">Instant canvas</span><h2>Live preview</h2></div><div className="preview-meta"><span className="local-badge"><Zap/> Browser local</span><span>{props.project.resolution}</span><span>{props.project.fps} FPS</span></div></div>
     <div ref={stage} data-testid="preview-stage" className={`stage ${props.project.videoFormat === "vertical_9_16" ? "vertical" : "landscape"}`}>
-      {imageUrl ? <div className="live-scene" key={props.scene?.sceneId}>{props.scene?.mediaType === "video" ? <video ref={clipVideo} src={imageUrl} playsInline preload="auto" style={motionStyle(props.scene, props.sceneProgress, props.project.fillMode)} onLoadedMetadata={e => { e.currentTarget.currentTime = (props.scene?.sourceStartSeconds || 0) + localTime; if (props.playing) void e.currentTarget.play().catch(() => {}); }}/> : <img data-testid="preview-image" src={imageUrl} alt="Current scene" style={motionStyle(props.scene, props.sceneProgress, props.project.fillMode)}/>}{props.scene?.texts?.filter((overlay) => localTime >= overlay.startSeconds && (overlay.endSeconds === null || localTime <= overlay.endSeconds)).map((overlay) => <div key={overlay.id} className="preview-text" dir="auto" style={{ left: `${overlay.x}%`, top: `${overlay.y}%`, color: overlay.color, fontFamily: overlay.fontFamily, fontSize: `${Math.max(10, overlay.fontSize / 2)}px` }}>{overlay.text}</div>)}</div> : <div className="stage-empty"><Play/><strong>Your preview appears here</strong><span>Drop images into the media library to begin.</span></div>}
+      {imageUrl ? <div className="live-scene" key={props.scene?.sceneId}>{props.scene?.mediaType === "video" ? <video ref={clipVideo} src={imageUrl} playsInline preload="auto" muted={props.scene?.sourceAudio === false} style={motionStyle(props.scene, props.sceneProgress, props.project.fillMode)} onLoadedMetadata={e => { e.currentTarget.muted = props.scene?.sourceAudio === false; e.currentTarget.volume = 1; e.currentTarget.currentTime = (props.scene?.sourceStartSeconds || 0) + localTime; if (props.playing) void e.currentTarget.play().catch(() => {}); }}/> : <img data-testid="preview-image" src={imageUrl} alt="Current scene" style={motionStyle(props.scene, props.sceneProgress, props.project.fillMode)}/>}{props.scene?.texts?.filter((overlay) => localTime >= overlay.startSeconds && (overlay.endSeconds === null || localTime <= overlay.endSeconds)).map((overlay) => <div key={overlay.id} className="preview-text" dir="auto" style={{ left: `${overlay.x}%`, top: `${overlay.y}%`, color: overlay.color, fontFamily: overlay.fontFamily, fontSize: `${Math.max(10, overlay.fontSize / 2)}px` }}>{overlay.text}</div>)}</div> : <div className="stage-empty"><Play/><strong>Your preview appears here</strong><span>Drop media into the media library to begin.</span></div>}
       {props.scene && <div className="stage-badge">{props.scene.motion.replace(/([A-Z])/g, " $1").trim()}</div>}
     </div>
     <div className="transport">
